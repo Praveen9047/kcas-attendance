@@ -1,0 +1,19 @@
+{
+  "name": "KCAS Attendance - Krishna College",
+  "short_name": "KCAS Attendance",
+  "description": "Mobile Attendance Management Portal for Krishna College of Arts and Science (KCAS), Karur",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F9",
+  "theme_color": "#B91C1C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity"]
+}

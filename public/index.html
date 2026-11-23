@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KCAS Attendance Management System | Krishna College of Arts and Science</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#B91C1C">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+  <link rel="icon" href="/icons/icon.svg">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <a href="#" class="college-brand" onclick="App.navigateHome()">
+        <div class="college-logo-badge">K</div>
+        <div class="college-info">
+          <h1>Krishna College of Arts and Science</h1>
+          <p>KCAS • Palayam Road, Karur, Tamil Nadu 639007</p>
+        </div>
+      </a>
+
+      <div class="user-nav" id="headerUserNav" style="display:none;">
+        <div class="user-badge" id="headerUserBadge">
+          <span class="role-tag" id="headerRoleTag">STUDENT</span>
+          <span id="headerUserName">Loading...</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="API.logout()" title="Logout">
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Desktop Tabs Navigation (Hidden on login screen) -->
+  <div class="main-wrapper" id="desktopNavWrapper" style="display:none;">
+    <nav class="nav-tabs" id="roleTabs">
+      <!-- Injected dynamically per role -->
+    </nav>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="main-wrapper" id="appMain">
+    
+    <!-- ============================================================ -->
+    <!-- VIEW: LOGIN PAGE -->
+    <!-- ============================================================ -->
+    <div id="loginView" class="login-page-container">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="login-logo">🏛️</div>
+          <h2>KCAS Attendance Portal</h2>
+          <p>Krishna College of Arts and Science, Karur</p>
+        </div>
+
+        <!-- Android App Install Banner -->
+        <div id="pwaInstallBanner" style="display:none; background:#FEF2F2; border:1px solid #FECDD3; border-radius:10px; padding:10px 14px; margin-bottom:16px; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:22px;">📲</span>
+            <div>
+              <strong style="font-size:12px; color:#B91C1C; display:block;">Install KCAS Android App</strong>
+              <span style="font-size:11px; color:#64748B;">Add to home screen as standalone APK app</span>
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="App.triggerPwaInstall()">Install</button>
+        </div>
+
+        <!-- 3-Step Attendance Flow Quick Guide -->
+        <div class="flow-stepper">
+          <div class="flow-step">
+            <div class="step-num">1</div>
+            <div class="step-text">
+              <strong>Sign in</strong>
+              <span>Select role</span>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num">2</div>
+            <div class="step-text">
+              <strong>Mark</strong>
+              <span>QR / Check-in</span>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num">3</div>
+            <div class="step-text">
+              <strong>Confirm</strong>
+              <span>View stats</span>
+            </div>
+          </div>
+        </div>
+
+        <form id="loginForm" onsubmit="App.handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="loginUsername">Username / Register Number</label>
+            <input type="text" id="loginUsername" class="form-input" placeholder="e.g. admin or kcas24cs101" required autocomplete="username">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
+          </div>
+
+          <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-lg">
+            <span>Sign In to Dashboard</span>
+          </button>
+        </form>
+
+        <!-- Fast Demo Quick-Login Buttons -->
+        <div class="demo-role-selector">
+          <div class="demo-title">
+            <span>⚡ Quick Demo Login (Click to Test)</span>
+          </div>
+          <div class="demo-buttons-grid">
+            <button class="demo-btn" onclick="App.fillDemo('admin', 'admin123')">
+              <strong>👑 Admin</strong>
+              <small>Principal / Admin</small>
+            </button>
+            <button class="demo-btn" onclick="App.fillDemo('dr.anitha', 'staff123')">
+              <strong>👩‍🏫 Dr. M. Anitha</strong>
+              <small>HOD & CS Faculty</small>
+            </button>
+            <button class="demo-btn" onclick="App.fillDemo('prof.ramesh', 'staff123')">
+              <strong>👨‍🏫 Prof. Ramesh</strong>
+              <small>CS Faculty</small>
+            </button>
+            <button class="demo-btn" onclick="App.fillDemo('kcas24cs101', 'student123')">
+              <strong>🎓 K. Vignesh</strong>
+              <small>Student (90% Attended)</small>
+            </button>
+            <button class="demo-btn" onclick="App.fillDemo('kcas24cs102', 'student123')">
+              <strong>🎓 P. Divya</strong>
+              <small>Student (85% Attended)</small>
+            </button>
+            <button class="demo-btn" onclick="App.fillDemo('kcas24cs105', 'student123')">
+              <strong>⚠️ R. Aravind</strong>
+              <small>Student (Low Attendance 60%)</small>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW: STUDENT DASHBOARD -->
+    <!-- ============================================================ -->
+    <div id="studentDashboardView" style="display:none;">
+      
+      <!-- Student Profile Card -->
+      <div class="card" style="background: linear-gradient(135deg, #FFFFFF 60%, #FEF2F2 100%);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h2 id="stuProfileName" style="font-size:20px; color:#B91C1C;">Student Name</h2>
+              <span class="role-tag">STUDENT</span>
+            </div>
+            <p id="stuProfileReg" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Reg No: KCAS24CS101</p>
+            <p id="stuProfileClass" style="font-size:13px; color:#64748B;">III B.Sc Computer Science - A • Semester 5</p>
+            <p id="stuProfileCollege" style="font-size:11px; color:#94A3B8;">Krishna College of Arts and Science, Karur</p>
+          </div>
+          <button class="btn btn-primary" onclick="App.openScannerModal()">
+            <span style="font-size:18px;">📷</span>
+            <span>Scan Active Class QR</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Class Session Alert Card -->
+      <div id="stuActiveSessionCard" class="card" style="display:none; border:2px solid #059669; background:#ECFDF5;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <span class="status-badge status-present" style="margin-bottom:6px;">🟢 Active Class in Progress</span>
+            <h3 id="stuActiveSubName" style="font-size:16px; color:#065F46;">Subject Name</h3>
+            <p id="stuActiveStaff" style="font-size:12px; color:#047857;">Staff: Dr. M. Anitha • Started at 09:30 AM</p>
+          </div>
+          <button class="btn btn-success" onclick="App.openScannerModal()">
+            <span>Scan QR Now</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Low Attendance Warning Alert (Shown if < 75%) -->
+      <div id="stuLowAttendanceAlert" class="low-attendance-alert" style="display:none;">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-content">
+          <h4>Low Attendance Warning Alert!</h4>
+          <p id="stuLowAttendanceMsg">Your current aggregate attendance is below 75%. As per KCAS institutional regulations, a minimum of 75% attendance is required to appear for semester examinations. Please attend upcoming lectures.</p>
+        </div>
+      </div>
+
+      <!-- Attendance Percentage & KPI Grid -->
+      <div class="attendance-ring-card">
+        <div style="flex:1;">
+          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#64748B;">Overall Attendance Rate</span>
+          <h2 style="font-size:24px; color:#B91C1C; margin:4px 0 8px 0;">Performance Summary</h2>
+          <p style="font-size:13px; color:#475569;">Calculated across all registered subjects for the current semester.</p>
+          <div style="margin-top:12px; display:flex; gap:8px;">
+            <span class="status-badge" id="stuThresholdBadge">Min Required: 75%</span>
+          </div>
+        </div>
+        <div id="stuRingContainer"></div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value" id="stuTotalClasses">0</div>
+          <div class="metric-label">Total Classes</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#059669;" id="stuAttendedClasses">0</div>
+          <div class="metric-label">Present</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#D97706;" id="stuLateClasses">0</div>
+          <div class="metric-label">Late Arrivals</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#DC2626;" id="stuAbsentClasses">0</div>
+          <div class="metric-label">Absences</div>
+        </div>
+      </div>
+
+      <!-- Subject-Wise Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📚 Subject-wise Attendance Breakdown</h3>
+        </div>
+        <div id="stuSubjectBarsContainer"></div>
+      </div>
+
+      <!-- Detailed Attendance History with Filters -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">🕒 Detailed Attendance History</h3>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="stuHistoryStatusFilter" class="form-select" style="width:auto; padding:4px 8px; min-height:32px; font-size:12px;" onchange="App.loadStudentHistory()">
+              <option value="">All Statuses</option>
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="absent">Absent</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Subject</th>
+                <th>Faculty</th>
+                <th>Status</th>
+                <th>Verification</th>
+              </tr>
+            </thead>
+            <tbody id="stuHistoryTableBody">
+              <tr><td colspan="6" style="text-align:center;">Loading records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Weekly Timetable View -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📅 Class Weekly Timetable</h3>
+        </div>
+        <div class="timetable-grid" id="stuTimetableContainer">
+          <!-- Timetable cards injected dynamically -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW: STAFF DASHBOARD -->
+    <!-- ============================================================ -->
+    <div id="staffDashboardView" style="display:none;">
+
+      <!-- Staff Profile & Check-in Card -->
+      <div class="card" style="background: linear-gradient(135deg, #FFFFFF 60%, #FEF2F2 100%);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h2 id="staffProfileName" style="font-size:20px; color:#B91C1C;">Staff Name</h2>
+              <span class="role-tag">FACULTY</span>
+            </div>
+            <p id="staffProfileDesig" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Associate Professor & HOD</p>
+            <p id="staffProfileDept" style="font-size:13px; color:#64748B;">Department of Computer Science • KCAS Karur</p>
+          </div>
+
+          <!-- Staff Daily Self Check-in / Check-out Controls -->
+          <div style="background:#FFFFFF; border:1px solid #FECDD3; border-radius:12px; padding:12px 16px; text-align:right;">
+            <div style="font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; margin-bottom:4px;">Today's Attendance</div>
+            <div id="staffCheckInStatusDisplay" style="margin-bottom:8px;">
+              <span class="status-badge status-pending">Not Checked In</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button id="staffCheckInBtn" class="btn btn-primary btn-sm" onclick="App.handleStaffCheckIn()">
+                <span>Check In</span>
+              </button>
+              <button id="staffCheckOutBtn" class="btn btn-outline btn-sm" onclick="App.handleStaffCheckOut()" disabled>
+                <span>Check Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Class Session Host Card (if running) -->
+      <div id="staffActiveSessionBanner" class="card" style="display:none; border:2px solid #B91C1C;">
+        <div class="card-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="status-badge status-present">🟢 Active Class Session</span>
+            <h3 id="staffActiveSubTitle" style="font-size:16px;">CS501 - Web Technology</h3>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="App.finalizeActiveSession()">
+            <span>Finalize & End Session</span>
+          </button>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; align-items:center;">
+          <!-- QR Code Display Box -->
+          <div class="qr-screen-card" style="margin:0 auto; width:100%;">
+            <div style="font-size:12px; font-weight:700; color:#B91C1C; text-transform:uppercase;">Time-Limited Dynamic QR Code</div>
+            <p style="font-size:11px; color:#64748B;">Rotates dynamically to prevent screenshot sharing</p>
+
+            <div class="qr-box-wrapper" id="staffLiveQrBox">
+              <!-- SVG QR generated here -->
+            </div>
+
+            <div class="qr-progress-bar-container">
+              <div class="qr-progress-bar" id="staffQrProgress"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748B; max-width:260px; margin:0 auto;">
+              <span id="staffQrTimerText">Refreshing in 30s</span>
+              <button class="btn btn-light btn-sm" style="padding:2px 8px; font-size:10px; min-height:24px;" onclick="App.copyActiveQRToken()">Copy Token</button>
+            </div>
+          </div>
+
+          <!-- Live Session Realtime Roster & Stats -->
+          <div>
+            <div class="metrics-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom:12px;">
+              <div class="metric-card" style="padding:10px;">
+                <div class="metric-value" style="font-size:20px;" id="staffLiveTotal">0</div>
+                <div class="metric-label" style="font-size:10px;">Class Total</div>
+              </div>
+              <div class="metric-card" style="padding:10px;">
+                <div class="metric-value" style="font-size:20px; color:#059669;" id="staffLivePresent">0</div>
+                <div class="metric-label" style="font-size:10px;">Scanned</div>
+              </div>
+              <div class="metric-card" style="padding:10px;">
+                <div class="metric-value" style="font-size:20px; color:#DC2626;" id="staffLiveAbsent">0</div>
+                <div class="metric-label" style="font-size:10px;">Unmarked</div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h4 style="font-size:13px; font-weight:700;">Class Attendance Roster</h4>
+              <button class="btn btn-light btn-sm" onclick="App.refreshActiveSessionMonitor()">🔄 Refresh</button>
+            </div>
+
+            <div class="table-container" style="max-height:260px; overflow-y:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reg No</th>
+                    <th>Student Name</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffLiveRosterTable">
+                  <tr><td colspan="4" style="text-align:center;">Loading roster...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start New Class Attendance Session Card (if no active session) -->
+      <div id="staffCreateSessionCard" class="card">
+        <div class="card-header">
+          <h3 class="card-title">➕ Launch New Attendance Session</h3>
+        </div>
+        <form id="createSessionForm" onsubmit="App.handleCreateSession(event)">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+            <div class="form-group">
+              <label class="form-label" for="sessionClassSelect">Select Class</label>
+              <select id="sessionClassSelect" class="form-select" required onchange="App.handleSessionClassChange()">
+                <option value="">-- Choose Class --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="sessionSubjectSelect">Select Subject</label>
+              <select id="sessionSubjectSelect" class="form-select" required>
+                <option value="">-- Choose Subject --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="sessionTopicInput">Lecture Topic / Notes</label>
+              <input type="text" id="sessionTopicInput" class="form-input" placeholder="e.g. Unit 3 - Relational Calculus" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <span>🚀 Start Session & Broadcast QR Code</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Staff Attendance Correction Requests -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📝 Request Attendance Correction</h3>
+          <p style="font-size:12px; color:#64748B;">Finalized attendance records cannot be silently modified. Formal justification is logged and reviewed by the Admin.</p>
+        </div>
+
+        <form id="correctionRequestForm" onsubmit="App.handleStaffCorrectionRequest(event)">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+            <div class="form-group">
+              <label class="form-label" for="corrClassSelect">Class</label>
+              <select id="corrClassSelect" class="form-select" required onchange="App.handleCorrClassChange()">
+                <option value="">-- Select Class --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="corrStudentSelect">Student</label>
+              <select id="corrStudentSelect" class="form-select" required>
+                <option value="">-- Select Student --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="corrStatusSelect">Requested New Status</label>
+              <select id="corrStatusSelect" class="form-select" required>
+                <option value="present">Present (On-Time)</option>
+                <option value="late">Late Arrival</option>
+                <option value="absent">Absent</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="corrReason">Justification / Reason for Correction</label>
+            <textarea id="corrReason" class="form-textarea" rows="2" placeholder="e.g. Student was present in class laboratory; phone battery died before QR scan." required></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-outline">
+            <span>Submit Request to Admin</span>
+          </button>
+        </form>
+
+        <div style="margin-top:20px;">
+          <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">My Submitted Correction Requests</h4>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Student</th>
+                  <th>Subject</th>
+                  <th>Change</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Admin Remarks</th>
+                </tr>
+              </thead>
+              <tbody id="staffCorrectionRequestsBody">
+                <tr><td colspan="7" style="text-align:center;">No correction requests filed yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Staff Monthly Attendance History -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📅 My Monthly Check-in Log</h3>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Hours Logged</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="staffHistoryTableBody">
+              <tr><td colspan="5" style="text-align:center;">Loading logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW: ADMIN DASHBOARD -->
+    <!-- ============================================================ -->
+    <div id="adminDashboardView" style="display:none;">
+
+      <!-- Admin Top Metrics Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value" id="adminMetricStudents">0</div>
+          <div class="metric-label">Enrolled Students</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" id="adminMetricStaff">0</div>
+          <div class="metric-label">Faculty Staff</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#059669;" id="adminMetricTodayRate">0%</div>
+          <div class="metric-label">Today's Attendance</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#DC2626;" id="adminMetricPendingCorr">0</div>
+          <div class="metric-label">Pending Corrections</div>
+        </div>
+      </div>
+
+      <!-- Sub-tabs for Admin Controls -->
+      <div id="adminSubViewsContainer">
+        
+        <!-- ADMIN SUB-TAB 1: OVERVIEW -->
+        <div id="adminTabOverview">
+          
+          <!-- Low Attendance Alerts Section (< 75%) -->
+          <div class="card" style="border:2px solid #DC2626;">
+            <div class="card-header" style="background:#FEF2F2; margin:-20px -20px 16px -20px; padding:14px 20px;">
+              <h3 class="card-title" style="color:#B91C1C;">
+                <span>⚠️ Low Attendance Students (&lt; 75% Cutoff Alert)</span>
+              </h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reg No</th>
+                    <th>Student Name</th>
+                    <th>Class</th>
+                    <th>Attended / Total</th>
+                    <th>Percentage</th>
+                    <th>Contact</th>
+                  </tr>
+                </thead>
+                <tbody id="adminLowAttendanceTableBody">
+                  <tr><td colspan="6" style="text-align:center;">No students below threshold.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+            <!-- Today's Absentees -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title" style="color:#DC2626;">❌ Today's Absentees</h3>
+              </div>
+              <div class="table-container" style="max-height:240px; overflow-y:auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Reg No</th>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Subject</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminTodayAbsenteesBody">
+                    <tr><td colspan="4" style="text-align:center;">No absentees logged today.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Today's Late Arrivals -->
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title" style="color:#D97706;">⏰ Today's Late Arrivals</h3>
+              </div>
+              <div class="table-container" style="max-height:240px; overflow-y:auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Reg No</th>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Marked At</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminTodayLateBody">
+                    <tr><td colspan="4" style="text-align:center;">No late arrivals logged today.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Staff Check-in Status Today -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">👨‍🏫 Faculty Daily Attendance Today</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Faculty Name</th>
+                    <th>Designation</th>
+                    <th>Department</th>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th>Working Hours</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="adminStaffCheckInBody">
+                  <tr><td colspan="7" style="text-align:center;">Loading staff logs...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ADMIN SUB-TAB 2: ATTENDANCE RECORDS & EXPORT -->
+        <div id="adminTabRecords" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">🔍 Filter Attendance Records</h3>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline btn-sm" onclick="App.exportReport('csv')">📥 Export CSV</button>
+                <button class="btn btn-primary btn-sm" onclick="App.exportReport('excel')">📊 Export Excel</button>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px;">
+              <div>
+                <label class="form-label">From Date</label>
+                <input type="date" id="adminFilterFromDate" class="form-input">
+              </div>
+              <div>
+                <label class="form-label">To Date</label>
+                <input type="date" id="adminFilterToDate" class="form-input">
+              </div>
+              <div>
+                <label class="form-label">Class</label>
+                <select id="adminFilterClass" class="form-select">
+                  <option value="">All Classes</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label">Status</label>
+                <select id="adminFilterStatus" class="form-select">
+                  <option value="">All Statuses</option>
+                  <option value="present">Present</option>
+                  <option value="late">Late</option>
+                  <option value="absent">Absent</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-sm" onclick="App.filterAdminAttendanceRecords()">
+              <span>Apply Filters</span>
+            </button>
+
+            <div class="table-container" style="margin-top:16px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Reg No</th>
+                    <th>Student Name</th>
+                    <th>Class</th>
+                    <th>Subject</th>
+                    <th>Faculty</th>
+                    <th>Status</th>
+                    <th>Mode</th>
+                  </tr>
+                </thead>
+                <tbody id="adminAttendanceRecordsBody">
+                  <tr><td colspan="8" style="text-align:center;">Loading records...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 3: CORRECTION APPROVALS -->
+        <div id="adminTabCorrections" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">⚖️ Attendance Correction Review</h3>
+              <p style="font-size:12px; color:#64748B;">Staff correction requests require Admin authorization. Changes are strictly logged in the audit trail.</p>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Date</th>
+                    <th>Staff</th>
+                    <th>Student</th>
+                    <th>Subject</th>
+                    <th>Proposed Change</th>
+                    <th>Staff Justification</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="adminCorrectionsTableBody">
+                  <tr><td colspan="9" style="text-align:center;">No pending correction requests.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 4: USER MANAGEMENT & CSV IMPORT -->
+        <div id="adminTabUsers" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">👥 User Management (Students & Faculty)</h3>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline btn-sm" onclick="App.openCsvImportModal()">📁 Import CSV</button>
+                <button class="btn btn-primary btn-sm" onclick="App.openCreateUserModal()">➕ Add User</button>
+              </div>
+            </div>
+
+            <!-- User Search & Role Filter -->
+            <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+              <input type="text" id="adminUserSearchInput" class="form-input" style="flex:1; min-width:200px;" placeholder="Search by name, roll no, email..." oninput="App.filterAdminUsers()">
+              <select id="adminUserRoleFilter" class="form-select" style="width:auto;" onchange="App.filterAdminUsers()">
+                <option value="">All Roles</option>
+                <option value="student">Students</option>
+                <option value="staff">Faculty Staff</option>
+                <option value="admin">Administrators</option>
+              </select>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Username / Reg No</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Department / Class</th>
+                    <th>Email / Phone</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersTableBody">
+                  <tr><td colspan="7" style="text-align:center;">Loading users...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 5: ACADEMICS & ALLOCATIONS -->
+        <div id="adminTabAcademics" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">🏛️ Academic Hierarchy & Faculty Allocations</h3>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px;">
+              <!-- Departments & Classes -->
+              <div>
+                <h4 style="font-size:14px; font-weight:700; color:#B91C1C; margin-bottom:8px;">Departments & Classes</h4>
+                <div class="table-container">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>Code</th><th>Name</th><th>Degree</th></tr>
+                    </thead>
+                    <tbody id="adminAcademicsClassBody">
+                      <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Staff Subject Allocations -->
+              <div>
+                <h4 style="font-size:14px; font-weight:700; color:#B91C1C; margin-bottom:8px;">Faculty Subject Allocations</h4>
+                <div class="table-container">
+                  <table class="data-table">
+                    <thead>
+                      <tr><th>Faculty</th><th>Class</th><th>Subject</th></tr>
+                    </thead>
+                    <tbody id="adminAcademicsAllocBody">
+                      <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 6: SETTINGS & GEOFENCE -->
+        <div id="adminTabSettings" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">⚙️ Institutional Attendance Policies & Geofence</h3>
+            </div>
+            <form id="adminSettingsForm" onsubmit="App.handleSaveSettings(event)">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
+                <div class="form-group">
+                  <label class="form-label" for="settingQrDuration">QR Code Rotation Duration (Seconds)</label>
+                  <input type="number" id="settingQrDuration" class="form-input" min="10" max="300" required>
+                  <span class="form-hint">Time interval before QR token automatically expires & refreshes</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingLateGrace">Late Grace Period (Minutes)</label>
+                  <input type="number" id="settingLateGrace" class="form-input" min="1" max="60" required>
+                  <span class="form-hint">Minutes into class after which attendance is marked as Late</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingLowThreshold">Low Attendance Threshold (%)</label>
+                  <input type="number" id="settingLowThreshold" class="form-input" min="50" max="90" required>
+                  <span class="form-hint">Threshold triggering exam alert warning (Standard: 75%)</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingLocationToggle">Campus Geofence Verification</label>
+                  <select id="settingLocationToggle" class="form-select">
+                    <option value="0">Disabled (Allow standard QR scan)</option>
+                    <option value="1">Enabled (Enforce GPS presence within KCAS Campus)</option>
+                  </select>
+                  <span class="form-hint">Requires student GPS to be inside college campus</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingCampusLat">Campus Latitude</label>
+                  <input type="text" id="settingCampusLat" class="form-input" value="10.9234" required>
+                  <span class="form-hint">KCAS Palayam Road, Karur Latitude</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingCampusLng">Campus Longitude</label>
+                  <input type="text" id="settingCampusLng" class="form-input" value="78.0772" required>
+                  <span class="form-hint">KCAS Palayam Road, Karur Longitude</span>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="settingCampusRadius">Campus Geofence Radius (Meters)</label>
+                  <input type="number" id="settingCampusRadius" class="form-input" min="50" max="2000" value="350" required>
+                  <span class="form-hint">Allowed distance radius around campus</span>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="margin-top:12px;">
+                <span>Save System Settings</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 7: AUDIT LOGS -->
+        <div id="adminTabAudit" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📜 Immutable System Audit Logs</h3>
+              <p style="font-size:12px; color:#64748B;">Tracks logins, attendance scans, manual overrides, correction reviews, user creations, and policy changes.</p>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Target Entity</th>
+                    <th>Details</th>
+                    <th>IP Address</th>
+                  </tr>
+                </thead>
+                <tbody id="adminAuditLogsTableBody">
+                  <tr><td colspan="6" style="text-align:center;">Loading audit trails...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- MODALS -->
+  <!-- ============================================================ -->
+
+  <!-- Modal: Student QR Scanner -->
+  <div id="scannerModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📷 Scan Class Attendance QR</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeScannerModal()">✕ Close</button>
+      </div>
+
+      <!-- Video Feed Container -->
+      <div class="scanner-video-box">
+        <video id="scannerVideo" playsinline></video>
+        <div class="scanner-crosshair"></div>
+      </div>
+
+      <!-- Scanner Controls & Mode Toggle -->
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button id="startCamBtn" class="btn btn-outline btn-sm" style="flex:1;" onclick="App.startCameraScan()">
+          <span>📹 Open Camera</span>
+        </button>
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="App.autoDetectActiveQR()">
+          <span>⚡ Auto-Scan Active Class</span>
+        </button>
+      </div>
+
+      <!-- Campus Location Simulator Toggle -->
+      <div style="background:#FEF2F2; border:1px solid #FECDD3; border-radius:8px; padding:10px; margin-bottom:14px; font-size:12px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="scannerSimulateCampusCoords" checked>
+          <span><strong>Use KCAS Karur Campus GPS</strong> (Bypasses remote GPS for testing)</span>
+        </label>
+      </div>
+
+      <!-- Fallback Token Input -->
+      <div>
+        <label class="form-label" style="font-size:12px;" for="scannerManualToken">Or Paste / Test QR Token String:</label>
+        <input type="text" id="scannerManualToken" class="form-input" style="font-size:12px;" placeholder="Paste active class QR token here">
+        <button class="btn btn-outline btn-sm" style="width:100%; margin-top:8px;" onclick="App.submitManualQR()">
+          <span>Submit Token</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Attendance Success Confirmation -->
+  <div id="successModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="text-align:center;">
+      <div style="width:64px; height:64px; background:#ECFDF5; color:#059669; border-radius:50%; font-size:32px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
+        ✓
+      </div>
+      <h3 style="font-size:18px; color:#065F46; font-weight:800;" id="successModalTitle">Attendance Recorded!</h3>
+      <p style="font-size:13px; color:#475569; margin:8px 0 16px;" id="successModalMsg">Your attendance was verified and recorded successfully.</p>
+      
+      <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:8px; padding:12px; margin-bottom:16px; text-align:left; font-size:13px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span style="color:#64748B;">Subject:</span>
+          <strong id="successModalSubject">-</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span style="color:#64748B;">Recorded At:</span>
+          <strong id="successModalTime">-</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748B;">Status:</span>
+          <span class="status-badge status-present" id="successModalStatus">PRESENT</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-lg" onclick="App.closeSuccessModal()">
+        <span>Continue to Summary</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal: Create User (Admin) -->
+  <div id="createUserModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">➕ Create New User</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeCreateUserModal()">✕</button>
+      </div>
+      <form id="createUserForm" onsubmit="App.handleCreateUser(event)">
+        <div class="form-group">
+          <label class="form-label" for="newRole">Role</label>
+          <select id="newRole" class="form-select" required onchange="App.handleNewUserRoleChange()">
+            <option value="student">Student</option>
+            <option value="staff">Faculty Staff</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newUsername">Username / Register Number</label>
+          <input type="text" id="newUsername" class="form-input" placeholder="e.g. kcas24cs111" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newFullName">Full Name</label>
+          <input type="text" id="newFullName" class="form-input" placeholder="e.g. S. Saravanan" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newPassword">Initial Password</label>
+          <input type="password" id="newPassword" class="form-input" value="kcas123" required>
+        </div>
+
+        <div class="form-group" id="newUserClassGroup">
+          <label class="form-label" for="newUserClass">Class</label>
+          <select id="newUserClass" class="form-select">
+            <option value="">-- Select Class --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newEmail">Email Address</label>
+          <input type="email" id="newEmail" class="form-input" placeholder="name@kcas.edu.in">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:12px;">
+          <span>Create Account</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk CSV Import (Admin) -->
+  <div id="csvImportModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📁 Bulk CSV User Import</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeCsvImportModal()">✕</button>
+      </div>
+      <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Paste comma-separated CSV text or choose a CSV file. Supported headers: <code>username,full_name,email,role,class_name,password</code></p>
+      
+      <div class="form-group">
+        <label class="form-label" for="csvFileInput">Upload CSV File</label>
+        <input type="file" id="csvFileInput" accept=".csv" class="form-input" onchange="App.handleCsvFileSelect(event)">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="csvTextInput">Or Paste CSV Data Directly</label>
+        <textarea id="csvTextInput" class="form-textarea" rows="6" placeholder="username,full_name,email,role,password
+kcas24cs111,S. Suresh,suresh@kcas.edu.in,student,kcas123
+kcas24cs112,M. Monisha,monisha@kcas.edu.in,student,kcas123"></textarea>
+      </div>
+
+      <button class="btn btn-primary btn-lg" onclick="App.submitCsvImport()">
+        <span>Process & Import Users</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Mobile Bottom Navigation (Visible on phones) -->
+  <nav class="mobile-nav" id="mobileBottomNav" style="display:none;">
+    <!-- Populated dynamically based on user role -->
+  </nav>
+
+  <!-- Scripts -->
+  <script src="js/qrcode.js"></script>
+  <script src="js/qrscanner.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
