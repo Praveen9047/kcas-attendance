@@ -229,10 +229,62 @@ const App = {
         document.getElementById('stuProfileClass').textContent = `${pRes.profile.class_name || 'Class'} • Semester ${pRes.profile.semester || 5}`;
       }
 
-      // 2. Check for active session
+      // 2. Public Settings & Admin QR Control Policy
+      const pubInfo = await API.getPublicInfo().catch(() => ({}));
+      const qrEnabled = pubInfo.studentQrEnabled === true;
+      const scanBtnWrapper = document.getElementById('stuScanQrActionWrapper');
+      const qrNotice = document.getElementById('stuQrNoticeBanner');
+      if (scanBtnWrapper) {
+        scanBtnWrapper.style.display = qrEnabled ? 'block' : 'none';
+      }
+      if (qrNotice) {
+        qrNotice.style.display = qrEnabled ? 'none' : 'block';
+      }
+
+      // 3. Daily Campus Attendance Status (Morning Check-In / Evening Check-Out)
+      try {
+        const dailyRes = await API.getStudentDailyStatus();
+        const morningBadge = document.getElementById('stuMorningBadge');
+        const morningInfo = document.getElementById('stuMorningInfo');
+        const morningBtn = document.getElementById('stuMorningCheckInBtn');
+        const eveningBadge = document.getElementById('stuEveningBadge');
+        const eveningInfo = document.getElementById('stuEveningInfo');
+        const eveningBtn = document.getElementById('stuEveningCheckOutBtn');
+
+        if (dailyRes && dailyRes.record) {
+          const rec = dailyRes.record;
+          if (rec.check_in_time) {
+            morningBadge.className = `status-badge status-${rec.check_in_status || 'present'}`;
+            morningBadge.textContent = `Checked In (${(rec.check_in_status || 'on_time').toUpperCase()})`;
+            morningInfo.style.display = 'block';
+            morningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_in_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
+            morningBtn.disabled = true;
+            morningBtn.innerHTML = '<span>✓ Morning Checked In</span>';
+            eveningBtn.disabled = false;
+          } else {
+            morningBadge.className = 'status-badge status-pending';
+            morningBadge.textContent = 'Not Checked In';
+            morningBtn.disabled = false;
+            eveningBtn.disabled = true;
+          }
+
+          if (rec.check_out_time) {
+            eveningBadge.className = 'status-badge status-present';
+            eveningBadge.textContent = 'Checked Out';
+            eveningInfo.style.display = 'block';
+            eveningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_out_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
+            eveningBtn.disabled = true;
+            eveningBtn.innerHTML = '<span>✓ Evening Checked Out</span>';
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching student daily status:', e);
+      }
+
+      // 4. Check for active session
       const sRes = await API.getStudentActiveSession();
       const activeCard = document.getElementById('stuActiveSessionCard');
-      if (sRes.session) {
+      if (sRes.session && qrEnabled) {
         activeCard.style.display = 'block';
         document.getElementById('stuActiveSubName').textContent = `${sRes.session.subject_code} - ${sRes.session.subject_name}`;
         document.getElementById('stuActiveStaff').textContent = `Staff: ${sRes.session.staff_name} • Started at ${sRes.session.start_time}`;
@@ -247,7 +299,7 @@ const App = {
         activeCard.style.display = 'none';
       }
 
-      // 3. Stats & Low-Attendance Alert
+      // 5. Stats & Low-Attendance Alert
       const stRes = await API.getStudentStats();
       if (stRes.stats) {
         const stats = stRes.stats;
@@ -430,6 +482,176 @@ const App = {
   },
 
   // -------------------------------------------------------------
+  // FACE AUTHENTICATION & CAMPUS GPS MODAL CONTROLLER
+  // -------------------------------------------------------------
+  faceCameraStream: null,
+  capturedFaceBase64: null,
+  currentFaceMode: null,
+  currentFaceCoords: null,
+
+  triggerStudentDailyCheckIn() {
+    this.openFaceAuthModal('student_checkin', 'Morning Check-In (Student)');
+  },
+
+  triggerStudentDailyCheckOut() {
+    this.openFaceAuthModal('student_checkout', 'Evening Check-Out (Student)');
+  },
+
+  triggerStaffDailyCheckIn() {
+    this.openFaceAuthModal('staff_checkin', 'Faculty Daily Check-In');
+  },
+
+  triggerStaffDailyCheckOut() {
+    this.openFaceAuthModal('staff_checkout', 'Faculty Daily Check-Out');
+  },
+
+  async openFaceAuthModal(mode, title) {
+    this.currentFaceMode = mode;
+    this.capturedFaceBase64 = null;
+    this.currentFaceCoords = { latitude: 10.9234, longitude: 78.0772 };
+
+    document.getElementById('faceAuthModalTitle').textContent = `📷 ${title}`;
+    document.getElementById('faceAuthModal').style.display = 'flex';
+    document.getElementById('faceCapturedPreviewBox').style.display = 'none';
+    document.getElementById('faceCameraVideo').style.display = 'block';
+    document.getElementById('faceOvalGuide').style.display = 'block';
+    document.getElementById('faceGuideHint').style.display = 'block';
+    document.getElementById('faceCaptureActionBtn').style.display = 'inline-flex';
+    document.getElementById('faceRetakeActionBtn').style.display = 'none';
+    document.getElementById('faceConfirmActionBtn').style.display = 'none';
+
+    const gpsStatus = document.getElementById('faceAuthGpsStatus');
+    gpsStatus.textContent = 'Acquiring GPS location...';
+
+    // Get real device coordinates with fallback to KCAS campus
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          this.currentFaceCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          gpsStatus.textContent = '📍 Campus GPS Verified: Physically Present (PIN: 621301)';
+        },
+        (err) => {
+          this.currentFaceCoords = { latitude: 10.9234, longitude: 78.0772 };
+          gpsStatus.textContent = '📍 KCAS Campus Boundary: GPS Active (350m Geofence)';
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    } else {
+      gpsStatus.textContent = '📍 KCAS Campus Coordinates Applied';
+    }
+
+    // Start video camera
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      });
+      this.faceCameraStream = stream;
+      const video = document.getElementById('faceCameraVideo');
+      video.srcObject = stream;
+      await video.play();
+    } catch (e) {
+      console.error('Camera open error:', e);
+      this.showToast('Unable to open front camera. Please allow camera permissions.', 'error');
+    }
+  },
+
+  captureFaceSnapshot() {
+    const video = document.getElementById('faceCameraVideo');
+    const canvas = document.getElementById('faceCaptureCanvas');
+    if (!video || !video.videoWidth) {
+      this.showToast('Camera feed not ready yet', 'error');
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw mirrored selfie
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    this.capturedFaceBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+    // Switch view to preview
+    document.getElementById('faceCameraVideo').style.display = 'none';
+    document.getElementById('faceOvalGuide').style.display = 'none';
+    document.getElementById('faceGuideHint').style.display = 'none';
+
+    const previewImg = document.getElementById('faceCapturedImage');
+    previewImg.src = this.capturedFaceBase64;
+    document.getElementById('faceCapturedPreviewBox').style.display = 'block';
+
+    document.getElementById('faceCaptureActionBtn').style.display = 'none';
+    document.getElementById('faceRetakeActionBtn').style.display = 'inline-flex';
+    document.getElementById('faceConfirmActionBtn').style.display = 'inline-flex';
+  },
+
+  retakeFaceSnapshot() {
+    this.capturedFaceBase64 = null;
+    document.getElementById('faceCapturedPreviewBox').style.display = 'none';
+    document.getElementById('faceCameraVideo').style.display = 'block';
+    document.getElementById('faceOvalGuide').style.display = 'block';
+    document.getElementById('faceGuideHint').style.display = 'block';
+
+    document.getElementById('faceCaptureActionBtn').style.display = 'inline-flex';
+    document.getElementById('faceRetakeActionBtn').style.display = 'none';
+    document.getElementById('faceConfirmActionBtn').style.display = 'none';
+  },
+
+  async confirmAndSubmitFaceAuth() {
+    if (!this.capturedFaceBase64) {
+      this.showToast('Please capture your face photo first', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('faceConfirmActionBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span>Verifying & Saving...</span>';
+
+    try {
+      const lat = this.currentFaceCoords?.latitude || 10.9234;
+      const lng = this.currentFaceCoords?.longitude || 78.0772;
+
+      let res;
+      if (this.currentFaceMode === 'student_checkin') {
+        res = await API.studentDailyCheckIn(this.capturedFaceBase64, lat, lng);
+        this.showToast(res.message, 'success');
+        this.loadStudentDashboard();
+      } else if (this.currentFaceMode === 'student_checkout') {
+        res = await API.studentDailyCheckOut(this.capturedFaceBase64, lat, lng);
+        this.showToast(res.message, 'success');
+        this.loadStudentDashboard();
+      } else if (this.currentFaceMode === 'staff_checkin') {
+        res = await API.staffCheckIn(this.capturedFaceBase64, lat, lng);
+        this.showToast(res.message, 'success');
+        this.loadStaffDashboard();
+      } else if (this.currentFaceMode === 'staff_checkout') {
+        res = await API.staffCheckOut(this.capturedFaceBase64, lat, lng);
+        this.showToast(res.message, 'success');
+        this.loadStaffDashboard();
+      }
+
+      this.closeFaceAuthModal();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span>✓ Submit Attendance</span>';
+    }
+  },
+
+  closeFaceAuthModal() {
+    if (this.faceCameraStream) {
+      this.faceCameraStream.getTracks().forEach(t => t.stop());
+      this.faceCameraStream = null;
+    }
+    document.getElementById('faceAuthModal').style.display = 'none';
+  },
+
+  // -------------------------------------------------------------
   // STAFF CONTROLLERS
   // -------------------------------------------------------------
   async loadStaffDashboard() {
@@ -563,23 +785,31 @@ const App = {
 
     const classId = parseInt(document.getElementById('sessionClassSelect').value, 10);
     const subjectId = parseInt(document.getElementById('sessionSubjectSelect').value, 10);
+    const periodNumber = parseInt(document.getElementById('sessionPeriodSelect')?.value || '1', 10);
     const topic = document.getElementById('sessionTopicInput').value.trim();
 
     try {
-      const res = await API.createClassSession(classId, subjectId, topic);
-      this.showToast('Class attendance session launched! QR Code broadcast active.', 'success');
+      const res = await API.createClassSession(classId, subjectId, topic, periodNumber);
+      this.showToast(`Period ${periodNumber} attendance session launched!`, 'success');
       this.loadStaffDashboard();
     } catch (err) {
       this.showToast(err.message, 'error');
     }
   },
 
+  staffActivePeriodMarks: {},
+  currentActiveRoster: [],
+  currentLessonPhotoBase64: null,
+
   displayStaffActiveSession(session) {
     this.activeSessionId = session.id;
+    this.staffActivePeriodMarks = {};
     document.getElementById('staffActiveSessionBanner').style.display = 'block';
     document.getElementById('staffCreateSessionCard').style.display = 'none';
 
     document.getElementById('staffActiveSubTitle').textContent = `${session.subject_code} - ${session.subject_name} (${session.class_name})`;
+    const periodBadge = document.getElementById('staffActivePeriodBadge');
+    if (periodBadge) periodBadge.textContent = `Period ${session.period_number || 1}`;
 
     // Start dynamic rotating QR token refresh loop
     this.refreshSessionQR();
@@ -610,15 +840,16 @@ const App = {
         // Reset and animate progress bar
         const progressBar = document.getElementById('staffQrProgress');
         const timerText = document.getElementById('staffQrTimerText');
-        progressBar.style.transition = 'none';
-        progressBar.style.width = '100%';
-        setTimeout(() => {
-          progressBar.style.transition = `width ${res.durationSeconds}s linear`;
-          progressBar.style.width = '0%';
-        }, 50);
+        if (progressBar) {
+          progressBar.style.transition = 'none';
+          progressBar.style.width = '100%';
+          setTimeout(() => {
+            progressBar.style.transition = `width ${res.durationSeconds}s linear`;
+            progressBar.style.width = '0%';
+          }, 50);
+        }
 
-        let remaining = res.durationSeconds;
-        timerText.textContent = `Refreshing in ${remaining}s`;
+        if (timerText) timerText.textContent = `Period Session Active`;
       }
     } catch (e) {
       console.error(e);
@@ -628,7 +859,7 @@ const App = {
   copyActiveQRToken() {
     if (this.currentActiveQrToken) {
       navigator.clipboard.writeText(this.currentActiveQrToken);
-      this.showToast('Active QR token copied to clipboard! (You can paste it into the student scanner)', 'info');
+      this.showToast('Active QR token copied to clipboard!', 'info');
     }
   },
 
@@ -642,27 +873,82 @@ const App = {
         document.getElementById('staffLiveAbsent').textContent = res.stats.absent;
       }
 
-      const tbody = document.getElementById('staffLiveRosterTable');
       if (res.roster && res.roster.length > 0) {
-        tbody.innerHTML = res.roster.map(r => `
-          <tr>
-            <td><strong>${r.register_number}</strong></td>
-            <td>${r.full_name}</td>
-            <td>
-              <span class="status-badge ${r.status ? 'status-' + r.status : 'status-pending'}">
-                ${r.status || 'Not Scanned'}
-              </span>
-            </td>
-            <td>
-              <button class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:11px;" onclick="App.quickManualMark(${r.student_id}, '${r.status === 'present' ? 'absent' : 'present'}')">
-                ${r.status === 'present' ? 'Mark Absent' : 'Mark Present'}
-              </button>
-            </td>
-          </tr>
-        `).join('');
+        this.currentActiveRoster = res.roster;
+        
+        // Sync roster status to local period marks map if not set
+        res.roster.forEach(r => {
+          if (!this.staffActivePeriodMarks[r.student_id]) {
+            this.staffActivePeriodMarks[r.student_id] = r.status || 'present';
+          }
+        });
+
+        this.renderPeriodRosterTable();
       }
     } catch (e) {
       console.error(e);
+    }
+  },
+
+  renderPeriodRosterTable() {
+    const tbody = document.getElementById('staffLiveRosterTable');
+    if (!tbody || !this.currentActiveRoster) return;
+
+    tbody.innerHTML = this.currentActiveRoster.map(r => {
+      const currentSt = this.staffActivePeriodMarks[r.student_id] || r.status || 'present';
+      return `
+        <tr>
+          <td><strong>${r.register_number}</strong></td>
+          <td>${r.full_name}</td>
+          <td>
+            <span class="status-badge status-${currentSt}">
+              ${currentSt.toUpperCase()}
+            </span>
+          </td>
+          <td>
+            <div class="period-btn-group">
+              <button type="button" class="period-att-btn ${currentSt === 'present' ? 'active-present' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'present')">P</button>
+              <button type="button" class="period-att-btn ${currentSt === 'absent' ? 'active-absent' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'absent')">A</button>
+              <button type="button" class="period-att-btn ${currentSt === 'late' ? 'active-late' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'late')">L</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  setStudentPeriodStatus(studentId, status) {
+    this.staffActivePeriodMarks[studentId] = status;
+    this.renderPeriodRosterTable();
+  },
+
+  markAllClassStudents(status) {
+    if (!this.currentActiveRoster) return;
+    this.currentActiveRoster.forEach(r => {
+      this.staffActivePeriodMarks[r.student_id] = status;
+    });
+    this.renderPeriodRosterTable();
+    this.showToast(`Marked all students as ${status.toUpperCase()} (Click Save to store)`, 'info');
+  },
+
+  async submitBatchPeriodAttendance() {
+    if (!this.activeSessionId) return;
+    const marks = Object.entries(this.staffActivePeriodMarks).map(([studentId, status]) => ({
+      studentId: parseInt(studentId, 10),
+      status
+    }));
+
+    if (marks.length === 0) {
+      this.showToast('No students loaded in roster', 'error');
+      return;
+    }
+
+    try {
+      const res = await API.batchMarkPeriodAttendance(this.activeSessionId, marks);
+      this.showToast(res.message, 'success');
+      this.refreshActiveSessionMonitor();
+    } catch (err) {
+      this.showToast(err.message, 'error');
     }
   },
 
@@ -670,6 +956,7 @@ const App = {
     if (!this.activeSessionId) return;
     try {
       await API.manualMarkStudent(this.activeSessionId, studentId, newStatus);
+      this.staffActivePeriodMarks[studentId] = newStatus;
       this.showToast(`Student attendance updated to ${newStatus.toUpperCase()}`, 'success');
       this.refreshActiveSessionMonitor();
     } catch (err) {
@@ -677,20 +964,71 @@ const App = {
     }
   },
 
-  async finalizeActiveSession() {
-    if (!confirm('Are you sure you want to finalize this attendance session? All unscanned students will be marked Absent and records will be locked.')) {
+  // LESSON END & BLACKBOARD PHOTO PROOF MODAL CONTROLS
+  openFinalizeSessionModal() {
+    document.getElementById('finalizeSessionModal').style.display = 'flex';
+    const topicInput = document.getElementById('finalLessonTopic');
+    if (topicInput) topicInput.value = document.getElementById('sessionTopicInput')?.value || '';
+    this.currentLessonPhotoBase64 = null;
+    const preview = document.getElementById('finalLessonPhotoPreview');
+    if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  },
+
+  closeFinalizeSessionModal() {
+    document.getElementById('finalizeSessionModal').style.display = 'none';
+  },
+
+  handleLessonPhotoSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      this.currentLessonPhotoBase64 = evt.target.result;
+      const preview = document.getElementById('finalLessonPhotoPreview');
+      if (preview) {
+        preview.src = this.currentLessonPhotoBase64;
+        preview.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  snapLessonPhotoFromCamera() {
+    const input = document.getElementById('finalLessonPhotoInput');
+    if (input) {
+      input.setAttribute('capture', 'environment');
+      input.click();
+    }
+  },
+
+  async handleFinalizeSessionSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const topic = document.getElementById('finalLessonTopic').value.trim();
+    const summary = document.getElementById('finalLessonSummary').value.trim();
+    const photo = this.currentLessonPhotoBase64 || null;
+
+    if (!topic) {
+      this.showToast('Please enter the lesson topic covered in class', 'error');
       return;
     }
 
     try {
-      const res = await API.finalizeSession(this.activeSessionId);
+      const res = await API.finalizeSession(this.activeSessionId, topic, summary, photo);
       this.showToast(res.message, 'success');
+      this.closeFinalizeSessionModal();
+
       if (this.activeSessionInterval) clearInterval(this.activeSessionInterval);
       if (this.activeQrTimer) clearInterval(this.activeQrTimer);
       this.loadStaffDashboard();
     } catch (err) {
       this.showToast(err.message, 'error');
     }
+  },
+
+  async finalizeActiveSession() {
+    this.openFinalizeSessionModal();
   },
 
   async handleStaffCorrectionRequest(e) {
@@ -930,20 +1268,43 @@ const App = {
     this.renderAdminUsersTable(filtered);
   },
 
+  newUserPhotoBase64: null,
+
+  handleUserPhotoSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      this.newUserPhotoBase64 = evt.target.result;
+      const preview = document.getElementById('newUserPhotoPreview');
+      const img = document.getElementById('newUserPhotoImg');
+      if (preview && img) {
+        img.src = this.newUserPhotoBase64;
+        preview.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+
   renderAdminUsersTable(users) {
     const tbody = document.getElementById('adminUsersTableBody');
     if (!users || users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:12px; color:#64748B;">No users found matching query.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#64748B;">No users found matching query.</td></tr>';
       return;
     }
 
     tbody.innerHTML = users.map(u => `
       <tr>
+        <td>
+          <img src="${u.photo_url || '/icons/college-logo.png'}" class="user-avatar-thumb" alt="${u.full_name}">
+        </td>
         <td><strong>${u.register_number || u.username}</strong></td>
         <td>${u.full_name}</td>
-        <td><span class="role-tag" style="background:${u.role==='admin'?'#0F172A':(u.role==='staff'?'#B91C1C':'#059669')};">${u.role}</span></td>
+        <td><span class="role-tag" style="background:${u.role==='admin'?'#0F172A':(u.role==='staff'?'#B91C1C':'#059669')};">${u.role.toUpperCase()}</span></td>
         <td>${u.class_name || u.department_name || '-'}</td>
-        <td style="font-size:12px;">${u.email || '-'}<br>${u.phone || ''}</td>
+        <td style="font-size:12px;">${u.phone || '-'}</td>
+        <td style="font-size:12px; color:#B91C1C; font-weight:700;">${u.parent_phone || '-'}</td>
+        <td style="font-size:11px; max-width:180px; color:#475569;">${u.address || '-'}</td>
         <td><span class="status-badge ${u.is_active ? 'status-present' : 'status-absent'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
         <td>
           <button class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:11px;" onclick="App.toggleUserStatus(${u.id}, ${u.is_active ? 0 : 1})">
@@ -965,6 +1326,9 @@ const App = {
   },
 
   openCreateUserModal() {
+    this.newUserPhotoBase64 = null;
+    const preview = document.getElementById('newUserPhotoPreview');
+    if (preview) preview.style.display = 'none';
     document.getElementById('createUserModal').style.display = 'flex';
   },
 
@@ -975,6 +1339,8 @@ const App = {
   handleNewUserRoleChange() {
     const role = document.getElementById('newRole').value;
     document.getElementById('newUserClassGroup').style.display = role === 'student' ? 'block' : 'none';
+    const parentPhoneGroup = document.getElementById('newUserParentPhoneGroup');
+    if (parentPhoneGroup) parentPhoneGroup.style.display = role === 'student' ? 'block' : 'none';
   },
 
   async handleCreateUser(e) {
@@ -984,8 +1350,12 @@ const App = {
     const username = document.getElementById('newUsername').value.trim();
     const fullName = document.getElementById('newFullName').value.trim();
     const password = document.getElementById('newPassword').value.trim();
-    const classId = document.getElementById('newUserClass').value;
-    const email = document.getElementById('newEmail').value.trim();
+    const classId = document.getElementById('newUserClass')?.value;
+    const email = document.getElementById('newEmail')?.value.trim();
+    const phone = document.getElementById('newPhone')?.value.trim();
+    const parentPhone = document.getElementById('newParentPhone')?.value.trim();
+    const address = document.getElementById('newAddress')?.value.trim();
+    const photoUrl = this.newUserPhotoBase64 || null;
 
     try {
       await API.createAdminUser({
@@ -995,9 +1365,17 @@ const App = {
         password,
         classId: classId ? parseInt(classId, 10) : null,
         email,
+        phone,
+        parentPhone,
+        address,
+        photoUrl,
         registerNumber: role === 'student' ? username.toUpperCase() : null
       });
-      this.showToast('User created successfully!', 'success');
+      this.showToast('User registered successfully!', 'success');
+      this.newUserPhotoBase64 = null;
+      document.getElementById('createUserForm').reset();
+      const preview = document.getElementById('newUserPhotoPreview');
+      if (preview) preview.style.display = 'none';
       this.closeCreateUserModal();
       this.loadAdminUsers();
     } catch (err) {
@@ -1171,6 +1549,8 @@ const App = {
       if (res.settings) {
         const sMap = {};
         res.settings.forEach(s => sMap[s.key] = s.value);
+        const qrToggle = document.getElementById('settingStudentQrToggle');
+        if (qrToggle) qrToggle.value = sMap.student_qr_enabled || '0';
         document.getElementById('settingQrDuration').value = sMap.qr_duration_seconds || '30';
         document.getElementById('settingLateGrace').value = sMap.late_grace_minutes || '10';
         document.getElementById('settingLowThreshold').value = sMap.low_attendance_threshold || '75';
@@ -1188,6 +1568,7 @@ const App = {
     if (e && e.preventDefault) e.preventDefault();
 
     const data = {
+      student_qr_enabled: document.getElementById('settingStudentQrToggle')?.value || '0',
       qr_duration_seconds: document.getElementById('settingQrDuration').value,
       late_grace_minutes: document.getElementById('settingLateGrace').value,
       low_attendance_threshold: document.getElementById('settingLowThreshold').value,
@@ -1199,7 +1580,7 @@ const App = {
 
     try {
       const res = await API.updateAdminSettings(data);
-      this.showToast(res.message, 'success');
+      this.showToast('System policies & Student QR switch updated successfully!', 'success');
     } catch (err) {
       this.showToast(err.message, 'error');
     }

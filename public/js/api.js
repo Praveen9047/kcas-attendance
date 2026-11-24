@@ -90,6 +90,24 @@ const API = {
     return this.request('/api/student/profile');
   },
 
+  async getStudentDailyStatus() {
+    return this.request('/api/student/daily-status');
+  },
+
+  async studentDailyCheckIn(photo, latitude, longitude) {
+    return this.request('/api/student/daily-checkin', {
+      method: 'POST',
+      body: JSON.stringify({ photo, latitude, longitude })
+    });
+  },
+
+  async studentDailyCheckOut(photo, latitude, longitude) {
+    return this.request('/api/student/daily-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ photo, latitude, longitude })
+    });
+  },
+
   async getStudentTimetable() {
     return this.request('/api/student/timetable');
   },
@@ -119,22 +137,39 @@ const API = {
     return this.request('/api/staff/dashboard');
   },
 
-  async staffCheckIn() {
-    return this.request('/api/staff/check-in', { method: 'POST' });
+  async staffCheckIn(photo, latitude, longitude) {
+    return this.request('/api/staff/check-in', {
+      method: 'POST',
+      body: JSON.stringify({ photo, latitude, longitude })
+    });
   },
 
-  async staffCheckOut() {
-    return this.request('/api/staff/check-out', { method: 'POST' });
+  async staffCheckOut(photo, latitude, longitude) {
+    return this.request('/api/staff/check-out', {
+      method: 'POST',
+      body: JSON.stringify({ photo, latitude, longitude })
+    });
   },
 
   async getStaffHistory(month) {
     return this.request(`/api/staff/attendance-history${month ? '?month=' + month : ''}`);
   },
 
-  async createClassSession(classId, subjectId, topic) {
+  async createClassSession(classId, subjectId, topic, periodNumber = 1) {
     return this.request('/api/staff/sessions/create', {
       method: 'POST',
-      body: JSON.stringify({ classId, subjectId, topic })
+      body: JSON.stringify({ classId, subjectId, topic, periodNumber })
+    });
+  },
+
+  async getStaffClassStudents(classId) {
+    return this.request(`/api/staff/classes/${classId}/students`);
+  },
+
+  async batchMarkPeriodAttendance(sessionId, marks) {
+    return this.request(`/api/staff/sessions/${sessionId}/batch-mark`, {
+      method: 'POST',
+      body: JSON.stringify({ marks })
     });
   },
 
@@ -153,8 +188,11 @@ const API = {
     });
   },
 
-  async finalizeSession(sessionId) {
-    return this.request(`/api/staff/sessions/${sessionId}/finalize`, { method: 'POST' });
+  async finalizeSession(sessionId, lessonTopic, lessonSummary, lessonPhoto) {
+    return this.request(`/api/staff/sessions/${sessionId}/finalize`, {
+      method: 'POST',
+      body: JSON.stringify({ lessonTopic, lessonSummary, lessonPhoto })
+    });
   },
 
   async submitCorrectionRequest(data) {

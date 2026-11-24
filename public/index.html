@@ -22,7 +22,7 @@
         <img src="/icons/college-logo.png" alt="Krishna College Logo" class="college-logo-badge-img">
         <div class="college-info">
           <h1>Krishna College of Arts and Science</h1>
-          <p>KCAS • Palayam Road, Karur, Tamil Nadu 639007</p>
+          <p>KCAS • Palayam Road, Karur, Tamil Nadu 621301</p>
         </div>
       </a>
 
@@ -129,12 +129,67 @@
             </div>
             <p id="stuProfileReg" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Reg No: KCAS24CS101</p>
             <p id="stuProfileClass" style="font-size:13px; color:#64748B;">III B.Sc Computer Science - A • Semester 5</p>
-            <p id="stuProfileCollege" style="font-size:11px; color:#94A3B8;">Krishna College of Arts and Science, Karur</p>
+            <p id="stuProfileCollege" style="font-size:11px; color:#94A3B8;">Krishna College of Arts and Science, Karur - 621301</p>
           </div>
-          <button class="btn btn-primary" onclick="App.openScannerModal()">
-            <span style="font-size:18px;">📷</span>
-            <span>Scan Active Class QR</span>
-          </button>
+          <div id="stuScanQrActionWrapper">
+            <button id="stuScanQrBtn" class="btn btn-primary" onclick="App.openScannerModal()">
+              <span style="font-size:18px;">📷</span>
+              <span>Scan Active Class QR</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Daily Campus Biometric Attendance Card (Face + GPS inside KCAS Campus) -->
+      <div class="card" style="border: 2px solid #E2E8F0; background: #FFFFFF;">
+        <div class="card-header" style="margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:22px;">📍</span>
+            <div>
+              <h3 class="card-title" style="margin:0;">Daily Campus Attendance (Morning & Evening)</h3>
+              <p style="font-size:12px; color:#64748B; margin:0;">Face Authentication & KCAS Palayam Road Campus GPS Geofence (PIN: 621301)</p>
+            </div>
+          </div>
+          <div class="status-badge" style="background:#ECFDF5; color:#047857; font-size:11px;">
+            📍 Campus Geofence Active (350m)
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px;">
+          <!-- Morning Check-in Block -->
+          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:700; font-size:14px; color:#1E293B;">🌅 Morning Check-In</span>
+                <span id="stuMorningBadge" class="status-badge status-pending">Not Checked In</span>
+              </div>
+              <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Must be marked in the morning before 09:30 AM inside college campus.</p>
+              <div id="stuMorningInfo" style="font-size:12px; color:#334155; margin-bottom:12px; display:none;"></div>
+            </div>
+            <button id="stuMorningCheckInBtn" class="btn btn-primary" onclick="App.triggerStudentDailyCheckIn()">
+              <span>📸 Morning Check-In (Face + GPS)</span>
+            </button>
+          </div>
+
+          <!-- Evening Check-out Block -->
+          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:700; font-size:14px; color:#1E293B;">🌇 Evening Check-Out</span>
+                <span id="stuEveningBadge" class="status-badge status-pending">Not Checked Out</span>
+              </div>
+              <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Marked in the evening after 03:30 PM before leaving college campus.</p>
+              <div id="stuEveningInfo" style="font-size:12px; color:#334155; margin-bottom:12px; display:none;"></div>
+            </div>
+            <button id="stuEveningCheckOutBtn" class="btn btn-outline" onclick="App.triggerStudentDailyCheckOut()" disabled>
+              <span>📸 Evening Check-Out (Face + GPS)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- QR Disabled Notification Banner -->
+        <div id="stuQrNoticeBanner" style="margin-top:14px; background:#FEF2F2; border:1px solid #FECDD3; border-radius:8px; padding:10px 14px; font-size:12px; color:#991B1B; display:none;">
+          <strong>ℹ️ Class Period Attendance Policy:</strong> Student QR scanning is turned OFF by KCAS Administration. Individual class period attendance is marked directly by teaching staff during each lecture.
         </div>
       </div>
 
@@ -262,18 +317,18 @@
             <p id="staffProfileDept" style="font-size:13px; color:#64748B;">Department of Computer Science • KCAS Karur</p>
           </div>
 
-          <!-- Staff Daily Self Check-in / Check-out Controls -->
+          <!-- Staff Daily Biometric Check-in / Check-out Controls (Face Photo + GPS) -->
           <div style="background:#FFFFFF; border:1px solid #FECDD3; border-radius:12px; padding:12px 16px; text-align:right;">
-            <div style="font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; margin-bottom:4px;">Today's Attendance</div>
+            <div style="font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; margin-bottom:4px;">Today's Attendance (Face + GPS)</div>
             <div id="staffCheckInStatusDisplay" style="margin-bottom:8px;">
               <span class="status-badge status-pending">Not Checked In</span>
             </div>
             <div style="display:flex; gap:8px;">
-              <button id="staffCheckInBtn" class="btn btn-primary btn-sm" onclick="App.handleStaffCheckIn()">
-                <span>Check In</span>
+              <button id="staffCheckInBtn" class="btn btn-primary btn-sm" onclick="App.triggerStaffDailyCheckIn()">
+                <span>📸 Check In</span>
               </button>
-              <button id="staffCheckOutBtn" class="btn btn-outline btn-sm" onclick="App.handleStaffCheckOut()" disabled>
-                <span>Check Out</span>
+              <button id="staffCheckOutBtn" class="btn btn-outline btn-sm" onclick="App.triggerStaffDailyCheckOut()" disabled>
+                <span>📸 Check Out</span>
               </button>
             </div>
           </div>
@@ -284,34 +339,33 @@
       <div id="staffActiveSessionBanner" class="card" style="display:none; border:2px solid #B91C1C;">
         <div class="card-header">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span class="status-badge status-present">🟢 Active Class Session</span>
+            <span class="status-badge status-present">🟢 Active Class Period</span>
             <h3 id="staffActiveSubTitle" style="font-size:16px;">CS501 - Web Technology</h3>
+            <span id="staffActivePeriodBadge" class="status-badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">Period 1</span>
           </div>
-          <button class="btn btn-danger btn-sm" onclick="App.finalizeActiveSession()">
-            <span>Finalize & End Session</span>
+          <button class="btn btn-danger btn-sm" onclick="App.openFinalizeSessionModal()">
+            <span>📷 End Session & Save Lesson Photo</span>
           </button>
         </div>
 
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; align-items:center;">
-          <!-- QR Code Display Box -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; align-items:flex-start;">
+          <!-- QR Code Display Box (Optional) -->
           <div class="qr-screen-card" style="margin:0 auto; width:100%;">
-            <div style="font-size:12px; font-weight:700; color:#B91C1C; text-transform:uppercase;">Time-Limited Dynamic QR Code</div>
-            <p style="font-size:11px; color:#64748B;">Rotates dynamically to prevent screenshot sharing</p>
+            <div style="font-size:12px; font-weight:700; color:#B91C1C; text-transform:uppercase;">Class Period Attendance</div>
+            <p id="staffQrSubtitle" style="font-size:11px; color:#64748B;">Staff / HOD period attendance marking panel</p>
 
-            <div class="qr-box-wrapper" id="staffLiveQrBox">
-              <!-- SVG QR generated here -->
-            </div>
+            <div class="qr-box-wrapper" id="staffLiveQrBox"></div>
 
-            <div class="qr-progress-bar-container">
+            <div class="qr-progress-bar-container" id="staffQrProgressContainer">
               <div class="qr-progress-bar" id="staffQrProgress"></div>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748B; max-width:260px; margin:0 auto;">
-              <span id="staffQrTimerText">Refreshing in 30s</span>
+              <span id="staffQrTimerText">Active Session</span>
               <button class="btn btn-light btn-sm" style="padding:2px 8px; font-size:10px; min-height:24px;" onclick="App.copyActiveQRToken()">Copy Token</button>
             </div>
           </div>
 
-          <!-- Live Session Realtime Roster & Stats -->
+          <!-- Live Session Realtime Roster & Period-wise Marking -->
           <div>
             <div class="metrics-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom:12px;">
               <div class="metric-card" style="padding:10px;">
@@ -320,27 +374,31 @@
               </div>
               <div class="metric-card" style="padding:10px;">
                 <div class="metric-value" style="font-size:20px; color:#059669;" id="staffLivePresent">0</div>
-                <div class="metric-label" style="font-size:10px;">Scanned</div>
+                <div class="metric-label" style="font-size:10px;">Present</div>
               </div>
               <div class="metric-card" style="padding:10px;">
                 <div class="metric-value" style="font-size:20px; color:#DC2626;" id="staffLiveAbsent">0</div>
-                <div class="metric-label" style="font-size:10px;">Unmarked</div>
+                <div class="metric-label" style="font-size:10px;">Absent</div>
               </div>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <h4 style="font-size:13px; font-weight:700;">Class Attendance Roster</h4>
-              <button class="btn btn-light btn-sm" onclick="App.refreshActiveSessionMonitor()">🔄 Refresh</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+              <h4 style="font-size:13px; font-weight:700;">Student Period Attendance Marking</h4>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-success btn-sm" style="font-size:11px; padding:4px 8px;" onclick="App.markAllClassStudents('present')">✓ All Present</button>
+                <button class="btn btn-outline btn-sm" style="font-size:11px; padding:4px 8px;" onclick="App.markAllClassStudents('absent')">✗ All Absent</button>
+                <button class="btn btn-primary btn-sm" style="font-size:11px; padding:4px 10px;" onclick="App.submitBatchPeriodAttendance()">💾 Save Attendance</button>
+              </div>
             </div>
 
-            <div class="table-container" style="max-height:260px; overflow-y:auto;">
+            <div class="table-container" style="max-height:300px; overflow-y:auto;">
               <table class="data-table">
                 <thead>
                   <tr>
                     <th>Reg No</th>
                     <th>Student Name</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>Period Status</th>
+                    <th>Select Attendance</th>
                   </tr>
                 </thead>
                 <tbody id="staffLiveRosterTable">
@@ -355,10 +413,10 @@
       <!-- Start New Class Attendance Session Card (if no active session) -->
       <div id="staffCreateSessionCard" class="card">
         <div class="card-header">
-          <h3 class="card-title">➕ Launch New Attendance Session</h3>
+          <h3 class="card-title">➕ Launch Class Period Attendance Session</h3>
         </div>
         <form id="createSessionForm" onsubmit="App.handleCreateSession(event)">
-          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
             <div class="form-group">
               <label class="form-label" for="sessionClassSelect">Select Class</label>
               <select id="sessionClassSelect" class="form-select" required onchange="App.handleSessionClassChange()">
@@ -374,13 +432,25 @@
             </div>
 
             <div class="form-group">
+              <label class="form-label" for="sessionPeriodSelect">Class Period</label>
+              <select id="sessionPeriodSelect" class="form-select" required>
+                <option value="1">Period 1 (09:30 AM - 10:25 AM)</option>
+                <option value="2">Period 2 (10:25 AM - 11:20 AM)</option>
+                <option value="3">Period 3 (11:35 AM - 12:30 PM)</option>
+                <option value="4">Period 4 (01:15 PM - 02:10 PM)</option>
+                <option value="5">Period 5 (02:10 PM - 03:05 PM)</option>
+                <option value="6">Period 6 (03:05 PM - 04:00 PM)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
               <label class="form-label" for="sessionTopicInput">Lecture Topic / Notes</label>
               <input type="text" id="sessionTopicInput" class="form-input" placeholder="e.g. Unit 3 - Relational Calculus" required>
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary">
-            <span>🚀 Start Session & Broadcast QR Code</span>
+          <button type="submit" class="btn btn-primary" style="margin-top:8px;">
+            <span>🚀 Start Period Attendance Session</span>
           </button>
         </form>
       </div>
@@ -726,17 +796,20 @@
               <table class="data-table">
                 <thead>
                   <tr>
+                    <th>Photo</th>
                     <th>Username / Reg No</th>
                     <th>Full Name</th>
                     <th>Role</th>
                     <th>Department / Class</th>
-                    <th>Email / Phone</th>
+                    <th>Student Phone</th>
+                    <th>Parents Phone</th>
+                    <th>Address</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="adminUsersTableBody">
-                  <tr><td colspan="7" style="text-align:center;">Loading users...</td></tr>
+                  <tr><td colspan="10" style="text-align:center;">Loading users...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -791,6 +864,24 @@
               <h3 class="card-title">⚙️ Institutional Attendance Policies & Geofence</h3>
             </div>
             <form id="adminSettingsForm" onsubmit="App.handleSaveSettings(event)">
+              <!-- Admin Master Control: Student QR Self-Attendance Toggle -->
+              <div style="background:#FEF2F2; border:2px solid #FECDD3; border-radius:12px; padding:16px; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                  <div>
+                    <h4 style="color:#B91C1C; font-size:15px; margin:0 0 4px 0; font-weight:800;">🎯 Student QR Self-Attendance System Switch</h4>
+                    <p style="color:#7F1D1D; font-size:12px; margin:0;">
+                      Controls whether students can scan QR codes to mark class attendance. When OFF, class period attendance is marked exclusively by Staff/Faculty.
+                    </p>
+                  </div>
+                  <div>
+                    <select id="settingStudentQrToggle" class="form-select" style="font-weight:700; width:auto; border-color:#B91C1C; color:#B91C1C;">
+                      <option value="0">OFF (Disabled) - Faculty marks period attendance</option>
+                      <option value="1">ON (Enabled) - Students can scan QR in class</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
                 <div class="form-group">
                   <label class="form-label" for="settingQrDuration">QR Code Rotation Duration (Seconds)</label>
@@ -955,52 +1046,174 @@
     </div>
   </div>
 
-  <!-- Modal: Create User (Admin) -->
+  <!-- Modal: Create User (Admin with Phone, Parents Phone, Address, Photo) -->
   <div id="createUserModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:540px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">➕ Create New User</h3>
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">➕ Register New Student / Faculty</h3>
         <button class="btn btn-light btn-sm" onclick="App.closeCreateUserModal()">✕</button>
       </div>
       <form id="createUserForm" onsubmit="App.handleCreateUser(event)">
-        <div class="form-group">
-          <label class="form-label" for="newRole">Role</label>
-          <select id="newRole" class="form-select" required onchange="App.handleNewUserRoleChange()">
-            <option value="student">Student</option>
-            <option value="staff">Faculty Staff</option>
-            <option value="admin">Administrator</option>
-          </select>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="newRole">Role</label>
+            <select id="newRole" class="form-select" required onchange="App.handleNewUserRoleChange()">
+              <option value="student">Student</option>
+              <option value="staff">Faculty Staff</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newUsername">Username / Register No</label>
+            <input type="text" id="newUsername" class="form-input" placeholder="e.g. KCAS24CS111" required>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="newFullName">Full Name</label>
+            <input type="text" id="newFullName" class="form-input" placeholder="e.g. S. Saravanan" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newPassword">Initial Password</label>
+            <input type="password" id="newPassword" class="form-input" value="kcas123" required>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group" id="newUserClassGroup">
+            <label class="form-label" for="newUserClass">Class / Degree</label>
+            <select id="newUserClass" class="form-select">
+              <option value="">-- Select Class --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newEmail">Email Address</label>
+            <input type="email" id="newEmail" class="form-input" placeholder="name@kcas.edu.in">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="newPhone">Student / Staff Phone Number</label>
+            <input type="tel" id="newPhone" class="form-input" placeholder="e.g. 9876543210" required>
+          </div>
+
+          <div class="form-group" id="newUserParentPhoneGroup">
+            <label class="form-label" for="newParentPhone">Parents Phone Number</label>
+            <input type="tel" id="newParentPhone" class="form-input" placeholder="e.g. 9842100001">
+          </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="newUsername">Username / Register Number</label>
-          <input type="text" id="newUsername" class="form-input" placeholder="e.g. kcas24cs111" required>
+          <label class="form-label" for="newAddress">Residential Address</label>
+          <textarea id="newAddress" class="form-textarea" rows="2" placeholder="Street, Village/Town, District, Pincode"></textarea>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="newFullName">Full Name</label>
-          <input type="text" id="newFullName" class="form-input" placeholder="e.g. S. Saravanan" required>
+          <label class="form-label" for="newUserPhotoInput">Profile Photo (Passport Size / Selfie)</label>
+          <input type="file" id="newUserPhotoInput" accept="image/*" class="form-input" onchange="App.handleUserPhotoSelect(event)">
+          <div id="newUserPhotoPreview" style="margin-top:8px; display:none;">
+            <img id="newUserPhotoImg" src="" alt="Preview" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #B91C1C;">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:8px;">
+          <span>Register Account</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Biometric Face & Campus GPS Verification (For Student & Staff Check-In / Check-Out) -->
+  <div id="faceAuthModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px; text-align:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="faceAuthModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📷 Face Authentication & Campus GPS</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeFaceAuthModal()">✕</button>
+      </div>
+
+      <p id="faceAuthModalDesc" style="font-size:12px; color:#64748B; margin-bottom:12px;">
+        Position your face inside the green oval guide. Campus location will be verified automatically.
+      </p>
+
+      <!-- Video Stream / Canvas Box -->
+      <div class="face-camera-container">
+        <video id="faceCameraVideo" class="face-camera-video" playsinline autoplay muted></video>
+        <canvas id="faceCaptureCanvas" style="display:none;"></canvas>
+        <div id="faceOvalGuide" class="face-oval-guide"></div>
+        <div id="faceGuideHint" class="face-guide-hint">Center Face in Oval</div>
+      </div>
+
+      <!-- Captured Preview (if taken) -->
+      <div id="faceCapturedPreviewBox" style="display:none; margin-bottom:12px;">
+        <img id="faceCapturedImage" src="" alt="Captured Selfie" style="width:160px; height:160px; border-radius:50%; object-fit:cover; border:3px solid #10B981; margin:0 auto;">
+        <p style="font-size:12px; color:#059669; font-weight:700; margin-top:6px;">✓ Selfie Captured Successfully</p>
+      </div>
+
+      <!-- Campus GPS Status Indicator -->
+      <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:10px; margin-bottom:14px; font-size:12px; text-align:left;">
+        <div style="display:flex; align-items:center; gap:6px; color:#065F46; font-weight:700;">
+          <span>📍</span>
+          <span id="faceAuthGpsStatus">Verifying KCAS Campus GPS (PIN: 621301)...</span>
+        </div>
+        <div style="font-size:11px; color:#047857; margin-top:2px;">KCAS Palayam Road, Karur • Boundary radius: 350m</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display:flex; gap:8px;">
+        <button id="faceCaptureActionBtn" class="btn btn-primary" style="flex:1;" onclick="App.captureFaceSnapshot()">
+          <span>📸 Snap Selfie</span>
+        </button>
+        <button id="faceRetakeActionBtn" class="btn btn-light" style="display:none; flex:1;" onclick="App.retakeFaceSnapshot()">
+          <span>🔄 Retake</span>
+        </button>
+        <button id="faceConfirmActionBtn" class="btn btn-success" style="display:none; flex:1;" onclick="App.confirmAndSubmitFaceAuth()">
+          <span>✓ Submit Attendance</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Finalize Period Session & Lesson Photo Proof (Staff) -->
+  <div id="finalizeSessionModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:480px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:16px; color:#B91C1C; font-weight:800;">📸 End Session & Upload Lesson Photo</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeFinalizeSessionModal()">✕</button>
+      </div>
+      
+      <p style="font-size:12px; color:#64748B; margin-bottom:14px;">
+        Record the topic covered and provide classroom / blackboard photo proof before concluding this class period.
+      </p>
+
+      <form id="finalizeSessionForm" onsubmit="App.handleFinalizeSessionSubmit(event)">
+        <div class="form-group">
+          <label class="form-label" for="finalLessonTopic">Lesson Topic Covered</label>
+          <input type="text" id="finalLessonTopic" class="form-input" placeholder="e.g. Unit 3 - Normalization & 3NF" required>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="newPassword">Initial Password</label>
-          <input type="password" id="newPassword" class="form-input" value="kcas123" required>
-        </div>
-
-        <div class="form-group" id="newUserClassGroup">
-          <label class="form-label" for="newUserClass">Class</label>
-          <select id="newUserClass" class="form-select">
-            <option value="">-- Select Class --</option>
-          </select>
+          <label class="form-label" for="finalLessonSummary">Lesson Summary / Classroom Notes</label>
+          <textarea id="finalLessonSummary" class="form-textarea" rows="2" placeholder="Key topics explained, student questions, problems solved..."></textarea>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="newEmail">Email Address</label>
-          <input type="email" id="newEmail" class="form-input" placeholder="name@kcas.edu.in">
+          <label class="form-label">Classroom / Blackboard Photo Proof</label>
+          <input type="file" id="finalLessonPhotoInput" accept="image/*" class="form-input" onchange="App.handleLessonPhotoSelect(event)">
+          <div style="margin-top:6px; display:flex; gap:8px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.snapLessonPhotoFromCamera()">
+              <span>📷 Snap from Camera</span>
+            </button>
+          </div>
+          <img id="finalLessonPhotoPreview" class="lesson-photo-preview" src="" alt="Lesson Photo" style="display:none;">
         </div>
 
-        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:12px;">
-          <span>Create Account</span>
+        <button type="submit" class="btn btn-danger btn-lg" style="margin-top:10px;">
+          <span>✓ Finalize Period Session</span>
         </button>
       </form>
     </div>

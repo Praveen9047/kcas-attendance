@@ -879,3 +879,107 @@ a:hover {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* Biometric Face Camera & Geofence Overlay */
+.face-camera-container {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  height: 280px;
+  margin: 0 auto 16px;
+  background: #000000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+}
+
+.face-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror selfie */
+}
+
+.face-oval-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 170px;
+  height: 220px;
+  border: 3px dashed #10B981;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
+}
+
+.face-guide-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+
+/* Period Attendance Toggle Buttons */
+.period-btn-group {
+  display: inline-flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #CBD5E1;
+}
+
+.period-att-btn {
+  border: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #F1F5F9;
+  color: #475569;
+  transition: all 0.2s ease;
+}
+
+.period-att-btn:hover {
+  background: #E2E8F0;
+}
+
+.period-att-btn.active-present {
+  background: #10B981 !important;
+  color: #FFFFFF !important;
+}
+
+.period-att-btn.active-absent {
+  background: #EF4444 !important;
+  color: #FFFFFF !important;
+}
+
+.period-att-btn.active-late {
+  background: #F59E0B !important;
+  color: #FFFFFF !important;
+}
+
+/* User Avatar & Photo Preview */
+.user-avatar-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border-red);
+  background: #F1F5F9;
+}
+
+.lesson-photo-preview {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: var(--radius-md);
+  border: 1px solid #CBD5E1;
+  object-fit: contain;
+  margin-top: 8px;
+  background: #000;
+}

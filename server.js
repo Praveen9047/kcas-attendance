@@ -312,11 +312,13 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, {
           success: true,
           collegeName: settings.college_name || 'Krishna College of Arts and Science (KCAS)',
-          collegeAddress: settings.college_address || 'Palayam Road, Karur, Tamil Nadu 639007',
+          collegeAddress: settings.college_address || 'Palayam Road, Karur, Tamil Nadu 621301',
+          collegePincode: settings.college_pincode || '621301',
           campusLatitude: parseFloat(settings.campus_latitude || '10.9234'),
           campusLongitude: parseFloat(settings.campus_longitude || '78.0772'),
           campusRadiusMeters: parseInt(settings.campus_radius_meters || '350', 10),
-          locationVerificationEnabled: settings.location_verification_enabled === '1',
+          locationVerificationEnabled: true,
+          studentQrEnabled: settings.student_qr_enabled === '1',
           lowAttendanceThreshold: parseInt(settings.low_attendance_threshold || '75', 10)
         });
       }
@@ -328,6 +330,134 @@ const server = http.createServer(async (req, res) => {
         const auth = getAuthUser(req);
         if (!auth || auth.role !== 'student') {
           return sendError(res, 403, 'Forbidden: Student role required');
+        }
+
+        // Student Daily Morning / Evening Attendance Status
+        if (pathname === '/api/student/daily-status' && req.method === 'GET') {
+          const today = new Date().toISOString().split('T')[0];
+          const record = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
+          const settings = getSettings();
+          return sendJson(res, 200, {
+            success: true,
+            date: today,
+            record: record || null,
+            settings: {
+              campusLat: parseFloat(settings.campus_latitude || '10.9234'),
+              campusLng: parseFloat(settings.campus_longitude || '78.0772'),
+              campusRadius: parseInt(settings.campus_radius_meters || '350', 10),
+              studentQrEnabled: settings.student_qr_enabled === '1',
+              collegeAddress: settings.college_address || 'Palayam Road, Karur, Tamil Nadu 621301'
+            }
+          });
+        }
+
+        // Student Daily Morning Check-in with Face Photo & Campus GPS Verification
+        if (pathname === '/api/student/daily-checkin' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const { photo, latitude, longitude } = body;
+          const today = new Date().toISOString().split('T')[0];
+          const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+          if (!photo) {
+            return sendError(res, 400, 'Face Photo capture is required for daily check-in.');
+          }
+
+          // Enforce Campus Geofence
+          const settings = getSettings();
+          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
+          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
+          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+
+          if (latitude == null || longitude == null) {
+            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
+          }
+
+          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
+          if (dist > maxRadius) {
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus. Attendance can only be recorded inside campus (within ${maxRadius}m).`);
+          }
+
+          const existing = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
+          if (existing && existing.check_in_time) {
+            return sendError(res, 400, `You have already checked in today at ${existing.check_in_time}`);
+          }
+
+          const [h, m] = time.split(':').map(Number);
+          const status = (h < 9 || (h === 9 && m <= 30)) ? 'on_time' : 'late';
+
+          if (existing) {
+            db.prepare(`
+              UPDATE student_daily_attendance 
+              SET check_in_time = ?, check_in_photo = ?, check_in_lat = ?, check_in_lng = ?, check_in_status = ?
+              WHERE id = ?
+            `).run(time, photo, latitude, longitude, status, existing.id);
+          } else {
+            db.prepare(`
+              INSERT INTO student_daily_attendance (student_id, date, check_in_time, check_in_photo, check_in_lat, check_in_lng, check_in_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(auth.id, today, time, photo, latitude, longitude, status);
+          }
+
+          logAudit(auth.id, auth.username, 'STUDENT_CHECK_IN', 'student_daily_attendance', auth.id, `Student checked in at ${time} (${status}) from ${dist}m with Face Verification`, clientIp);
+
+          return sendJson(res, 200, {
+            success: true,
+            message: `Morning Check-In recorded at ${time} (${status === 'on_time' ? 'On-Time' : 'Late'})`,
+            checkInTime: time,
+            status,
+            distanceMeters: dist
+          });
+        }
+
+        // Student Daily Evening Check-out with Face Photo & Campus GPS Verification
+        if (pathname === '/api/student/daily-checkout' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const { photo, latitude, longitude } = body;
+          const today = new Date().toISOString().split('T')[0];
+          const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+          if (!photo) {
+            return sendError(res, 400, 'Face Photo capture is required for daily check-out.');
+          }
+
+          const existing = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
+          if (!existing || !existing.check_in_time) {
+            return sendError(res, 400, 'Please record your Morning Check-In first before Checking Out.');
+          }
+
+          if (existing.check_out_time) {
+            return sendError(res, 400, `You have already checked out today at ${existing.check_out_time}`);
+          }
+
+          // Enforce Campus Geofence
+          const settings = getSettings();
+          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
+          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
+          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+
+          if (latitude == null || longitude == null) {
+            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
+          }
+
+          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
+          if (dist > maxRadius) {
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus.`);
+          }
+
+          db.prepare(`
+            UPDATE student_daily_attendance 
+            SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?
+            WHERE id = ?
+          `).run(time, photo, latitude, longitude, existing.id);
+
+          logAudit(auth.id, auth.username, 'STUDENT_CHECK_OUT', 'student_daily_attendance', auth.id, `Student checked out at ${time} from ${dist}m with Face Verification`, clientIp);
+
+          return sendJson(res, 200, {
+            success: true,
+            message: `Evening Check-Out recorded at ${time}`,
+            checkOutTime: time,
+            distanceMeters: dist
+          });
         }
 
         // Student Profile & Academic Details
@@ -393,6 +523,11 @@ const server = http.createServer(async (req, res) => {
 
         // Student Marks Attendance via QR Code
         if (pathname === '/api/student/mark-attendance' && req.method === 'POST') {
+          const settings = getSettings();
+          if (settings.student_qr_enabled !== '1') {
+            return sendError(res, 403, 'Student QR scanning is disabled by Administrator. Class period attendance is marked directly by Faculty in class.');
+          }
+
           const body = await parseJsonBody(req);
           const { qrToken, latitude, longitude } = body;
 
@@ -688,10 +823,31 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // Staff Daily Self Check-in
+        // Staff Daily Self Check-in with Face Photo & Campus GPS Location Verification
         if (pathname === '/api/staff/check-in' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const { photo, latitude, longitude } = body;
           const today = new Date().toISOString().split('T')[0];
           const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+          if (!photo) {
+            return sendError(res, 400, 'Face Photo authentication is required for staff check-in.');
+          }
+
+          // Enforce Campus Geofence
+          const settings = getSettings();
+          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
+          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
+          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+
+          if (latitude == null || longitude == null) {
+            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
+          }
+
+          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
+          if (dist > maxRadius) {
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m).`);
+          }
 
           // Compare with 09:30 AM cutoff for On-Time vs Late
           const [h, m] = time.split(':').map(Number);
@@ -703,28 +859,39 @@ const server = http.createServer(async (req, res) => {
           }
 
           if (existing) {
-            db.prepare('UPDATE staff_attendance SET check_in_time = ?, status = ? WHERE id = ?').run(time, status, existing.id);
+            db.prepare(`
+              UPDATE staff_attendance 
+              SET check_in_time = ?, check_in_photo = ?, check_in_lat = ?, check_in_lng = ?, status = ? 
+              WHERE id = ?
+            `).run(time, photo, latitude, longitude, status, existing.id);
           } else {
             db.prepare(`
-              INSERT INTO staff_attendance (staff_id, date, check_in_time, status, notes)
-              VALUES (?, ?, ?, ?, 'Staff mobile check-in')
-            `).run(auth.id, today, time, status);
+              INSERT INTO staff_attendance (staff_id, date, check_in_time, check_in_photo, check_in_lat, check_in_lng, status, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'Staff biometric mobile check-in')
+            `).run(auth.id, today, time, photo, latitude, longitude, status);
           }
 
-          logAudit(auth.id, auth.username, 'STAFF_CHECK_IN', 'staff_attendance', auth.id, `Staff checked in at ${time} (${status})`, clientIp);
+          logAudit(auth.id, auth.username, 'STAFF_CHECK_IN', 'staff_attendance', auth.id, `Staff checked in at ${time} (${status}) from ${dist}m with Face Verification`, clientIp);
 
           return sendJson(res, 200, {
             success: true,
             message: `Check-in recorded at ${time} (${status === 'on_time' ? 'On-Time' : 'Late'})`,
             checkInTime: time,
-            status
+            status,
+            distanceMeters: dist
           });
         }
 
-        // Staff Daily Self Check-out
+        // Staff Daily Self Check-out with Face Photo & Campus GPS Verification
         if (pathname === '/api/staff/check-out' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const { photo, latitude, longitude } = body;
           const today = new Date().toISOString().split('T')[0];
           const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+          if (!photo) {
+            return sendError(res, 400, 'Face Photo authentication is required for staff check-out.');
+          }
 
           const existing = db.prepare('SELECT * FROM staff_attendance WHERE staff_id = ? AND date = ?').get(auth.id, today);
           if (!existing || !existing.check_in_time) {
@@ -733,6 +900,21 @@ const server = http.createServer(async (req, res) => {
 
           if (existing.check_out_time) {
             return sendError(res, 400, `You have already checked out today at ${existing.check_out_time}`);
+          }
+
+          // Enforce Campus Geofence
+          const settings = getSettings();
+          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
+          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
+          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+
+          if (latitude == null || longitude == null) {
+            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
+          }
+
+          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
+          if (dist > maxRadius) {
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m).`);
           }
 
           // Calculate working hours
@@ -748,17 +930,18 @@ const server = http.createServer(async (req, res) => {
 
           db.prepare(`
             UPDATE staff_attendance 
-            SET check_out_time = ?, working_hours = ?
+            SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?, working_hours = ?
             WHERE id = ?
-          `).run(time, workingHours, existing.id);
+          `).run(time, photo, latitude, longitude, workingHours, existing.id);
 
-          logAudit(auth.id, auth.username, 'STAFF_CHECK_OUT', 'staff_attendance', auth.id, `Staff checked out at ${time} (${workingHours} hrs)`, clientIp);
+          logAudit(auth.id, auth.username, 'STAFF_CHECK_OUT', 'staff_attendance', auth.id, `Staff checked out at ${time} (${workingHours} hrs) from ${dist}m with Face Verification`, clientIp);
 
           return sendJson(res, 200, {
             success: true,
             message: `Check-out recorded at ${time}. Total hours logged: ${workingHours} hrs.`,
             checkOutTime: time,
-            workingHours
+            workingHours,
+            distanceMeters: dist
           });
         }
 
@@ -774,10 +957,10 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, month, records });
         }
 
-        // Create Attendance Session & Start QR Broadcast
+        // Create Attendance Session & Start QR Broadcast (with Period Number)
         if (pathname === '/api/staff/sessions/create' && req.method === 'POST') {
           const body = await parseJsonBody(req);
-          const { classId, subjectId, topic } = body;
+          const { classId, subjectId, topic, periodNumber } = body;
 
           if (!classId || !subjectId) {
             return sendError(res, 400, 'Please select both class and subject');
@@ -796,15 +979,16 @@ const server = http.createServer(async (req, res) => {
           const qrSecret = crypto.randomBytes(24).toString('hex');
           const today = new Date().toISOString().split('T')[0];
           const startTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+          const period = parseInt(periodNumber || '1', 10);
 
           const stmt = db.prepare(`
-            INSERT INTO attendance_sessions (session_uuid, class_id, subject_id, staff_id, date, start_time, status, qr_secret, topic)
-            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+            INSERT INTO attendance_sessions (session_uuid, class_id, subject_id, staff_id, date, start_time, status, qr_secret, topic, period_number)
+            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
           `);
-          const result = stmt.run(sessionUuid, classId, subjectId, auth.id, today, startTime, qrSecret, topic || 'Regular Lecture Session');
+          const result = stmt.run(sessionUuid, classId, subjectId, auth.id, today, startTime, qrSecret, topic || 'Regular Lecture Session', period);
           const sessionId = Number(result.lastInsertRowid);
 
-          logAudit(auth.id, auth.username, 'CREATE_SESSION', 'attendance_sessions', sessionId, `Created attendance session for Class ${classId}, Subject ${subjectId}`, clientIp);
+          logAudit(auth.id, auth.username, 'CREATE_SESSION', 'attendance_sessions', sessionId, `Created attendance session for Class ${classId}, Subject ${subjectId}, Period ${period}`, clientIp);
 
           // Generate initial QR token
           const settings = getSettings();
@@ -818,8 +1002,24 @@ const server = http.createServer(async (req, res) => {
             qrToken,
             durationSeconds: duration,
             startTime,
-            topic
+            topic,
+            periodNumber: period
           });
+        }
+
+        // Get Student Roster for a Class (for Staff Period Attendance)
+        if (pathname.match(/^\/api\/staff\/classes\/(\d+)\/students$/) && req.method === 'GET') {
+          const match = pathname.match(/^\/api\/staff\/classes\/(\d+)\/students$/);
+          const classId = parseInt(match[1], 10);
+
+          const students = db.prepare(`
+            SELECT id, register_number, full_name, email, phone, parent_phone, photo_url
+            FROM users
+            WHERE class_id = ? AND role = 'student' AND is_active = 1
+            ORDER BY register_number ASC
+          `).all(classId);
+
+          return sendJson(res, 200, { success: true, students });
         }
 
         // Get Dynamic Rotating QR Token for an active session
@@ -925,10 +1125,56 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, message: `Student marked as ${status.toUpperCase()}` });
         }
 
-        // Finalize / Close Attendance Session
+        // Batch Period Attendance Marking by Staff / HOD
+        if (pathname.match(/^\/api\/staff\/sessions\/(\d+)\/batch-mark$/) && req.method === 'POST') {
+          const match = pathname.match(/^\/api\/staff\/sessions\/(\d+)\/batch-mark$/);
+          const sessionId = parseInt(match[1], 10);
+          const body = await parseJsonBody(req);
+          const { marks } = body;
+
+          if (!Array.isArray(marks) || marks.length === 0) {
+            return sendError(res, 400, 'Invalid or empty marks payload');
+          }
+
+          const session = db.prepare('SELECT id, staff_id, status FROM attendance_sessions WHERE id = ?').get(sessionId);
+          if (!session) return sendError(res, 404, 'Session not found');
+          if (session.staff_id !== auth.id && auth.role !== 'admin') {
+            return sendError(res, 403, 'Unauthorized');
+          }
+
+          const stmt = db.prepare(`
+            INSERT INTO student_attendance (session_id, student_id, status, marked_at, marked_by, notes)
+            VALUES (?, ?, ?, datetime('now', 'localtime'), 'staff_manual', 'Marked by Staff/HOD in period attendance')
+            ON CONFLICT(session_id, student_id) DO UPDATE SET
+              status = excluded.status,
+              marked_at = datetime('now', 'localtime'),
+              marked_by = 'staff_manual',
+              notes = 'Updated by Staff/HOD in period attendance'
+          `);
+
+          let count = 0;
+          for (const item of marks) {
+            if (item.studentId && ['present', 'absent', 'late'].includes(item.status)) {
+              stmt.run(sessionId, item.studentId, item.status);
+              count++;
+            }
+          }
+
+          logAudit(auth.id, auth.username, 'BATCH_MARK_ATTENDANCE', 'attendance_sessions', sessionId, `Staff marked attendance for ${count} students in Period Session`, clientIp);
+
+          return sendJson(res, 200, {
+            success: true,
+            message: `Recorded period attendance for ${count} students successfully.`,
+            count
+          });
+        }
+
+        // Finalize / Close Attendance Session (with Lesson Topic, Summary, and Classroom Photo Proof)
         if (pathname.match(/^\/api\/staff\/sessions\/(\d+)\/finalize$/) && req.method === 'POST') {
           const match = pathname.match(/^\/api\/staff\/sessions\/(\d+)\/finalize$/);
           const sessionId = parseInt(match[1], 10);
+          const body = await parseJsonBody(req);
+          const { lessonTopic, lessonSummary, lessonPhoto } = body;
 
           const session = db.prepare('SELECT id, class_id, staff_id, status FROM attendance_sessions WHERE id = ?').get(sessionId);
           if (!session) return sendError(res, 404, 'Session not found');
@@ -954,13 +1200,21 @@ const server = http.createServer(async (req, res) => {
             markAbsent.run(sessionId, s.id);
           }
 
-          db.prepare('UPDATE attendance_sessions SET status = "completed", end_time = ? WHERE id = ?').run(endTime, sessionId);
+          db.prepare(`
+            UPDATE attendance_sessions 
+            SET status = "completed", 
+                end_time = ?,
+                lesson_topic = COALESCE(?, lesson_topic),
+                lesson_summary = COALESCE(?, lesson_summary),
+                lesson_photo = COALESCE(?, lesson_photo)
+            WHERE id = ?
+          `).run(endTime, lessonTopic || null, lessonSummary || null, lessonPhoto || null, sessionId);
 
-          logAudit(auth.id, auth.username, 'FINALIZE_SESSION', 'attendance_sessions', sessionId, `Finalized session ${sessionId}. ${unrecordedStudents.length} students auto-marked absent.`, clientIp);
+          logAudit(auth.id, auth.username, 'FINALIZE_SESSION', 'attendance_sessions', sessionId, `Finalized session ${sessionId} with lesson proof photo. ${unrecordedStudents.length} students auto-marked absent.`, clientIp);
 
           return sendJson(res, 200, {
             success: true,
-            message: `Session finalized successfully at ${endTime}. All unscanned students marked Absent.`
+            message: `Session finalized successfully at ${endTime}. Lesson summary and photo proof saved.`
           });
         }
 
@@ -1151,6 +1405,7 @@ const server = http.createServer(async (req, res) => {
 
           let query = `
             SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone,
+                   u.parent_phone, u.address, u.photo_url,
                    u.department_id, u.class_id, u.register_number, u.designation, u.is_active, u.created_at,
                    d.name as department_name, d.code as department_code,
                    c.name as class_name
@@ -1174,9 +1429,9 @@ const server = http.createServer(async (req, res) => {
             params.push(classId);
           }
           if (search) {
-            query += ' AND (u.full_name LIKE ? OR u.username LIKE ? OR u.register_number LIKE ? OR u.email LIKE ?)';
+            query += ' AND (u.full_name LIKE ? OR u.username LIKE ? OR u.register_number LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.parent_phone LIKE ?)';
             const s = `%${search}%`;
-            params.push(s, s, s, s);
+            params.push(s, s, s, s, s, s);
           }
 
           query += ' ORDER BY u.role, u.full_name ASC';
@@ -1185,10 +1440,10 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, users });
         }
 
-        // Create User
+        // Create User (with Student Phone, Parent Phone, Address, Photo)
         if (pathname === '/api/admin/users' && req.method === 'POST') {
           const body = await parseJsonBody(req);
-          const { username, password, role, fullName, email, phone, departmentId, classId, registerNumber, designation } = body;
+          const { username, password, role, fullName, email, phone, parentPhone, address, photoUrl, departmentId, classId, registerNumber, designation } = body;
 
           if (!username || !password || !role || !fullName) {
             return sendError(res, 400, 'Username, password, role, and full name are required');
@@ -1201,8 +1456,8 @@ const server = http.createServer(async (req, res) => {
 
           const auth = hashPassword(password);
           const stmt = db.prepare(`
-            INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, class_id, register_number, designation, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
           `);
           const resInsert = stmt.run(
             username.trim(),
@@ -1212,6 +1467,9 @@ const server = http.createServer(async (req, res) => {
             fullName.trim(),
             email || null,
             phone || null,
+            parentPhone || null,
+            address || null,
+            photoUrl || null,
             departmentId || null,
             classId || null,
             registerNumber ? registerNumber.trim().toUpperCase() : null,
@@ -1228,7 +1486,7 @@ const server = http.createServer(async (req, res) => {
           const match = pathname.match(/^\/api\/admin\/users\/(\d+)$/);
           const targetUserId = parseInt(match[1], 10);
           const body = await parseJsonBody(req);
-          const { fullName, email, phone, departmentId, classId, registerNumber, designation, isActive, newPassword } = body;
+          const { fullName, email, phone, parentPhone, address, photoUrl, departmentId, classId, registerNumber, designation, isActive, newPassword } = body;
 
           const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(targetUserId);
           if (!user) return sendError(res, 404, 'User not found');
@@ -1238,13 +1496,28 @@ const server = http.createServer(async (req, res) => {
               full_name = COALESCE(?, full_name),
               email = ?,
               phone = ?,
+              parent_phone = COALESCE(?, parent_phone),
+              address = COALESCE(?, address),
+              photo_url = COALESCE(?, photo_url),
               department_id = ?,
               class_id = ?,
               register_number = ?,
               designation = ?,
               is_active = COALESCE(?, is_active)
           `;
-          const params = [fullName, email || null, phone || null, departmentId || null, classId || null, registerNumber || null, designation || null, isActive !== undefined ? isActive : null];
+          const params = [
+            fullName,
+            email || null,
+            phone || null,
+            parentPhone !== undefined ? parentPhone : null,
+            address !== undefined ? address : null,
+            photoUrl !== undefined ? photoUrl : null,
+            departmentId || null,
+            classId || null,
+            registerNumber || null,
+            designation || null,
+            isActive !== undefined ? isActive : null
+          ];
 
           if (newPassword && newPassword.trim().length >= 4) {
             const newAuth = hashPassword(newPassword.trim());

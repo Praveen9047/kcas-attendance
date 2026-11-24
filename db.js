@@ -212,7 +212,62 @@ function initSchema() {
       ip_address TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS student_daily_attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      check_in_time TEXT,
+      check_in_photo TEXT,
+      check_in_lat REAL,
+      check_in_lng REAL,
+      check_in_status TEXT DEFAULT 'on_time' CHECK(check_in_status IN ('on_time', 'late', 'absent')),
+      check_out_time TEXT,
+      check_out_photo TEXT,
+      check_out_lat REAL,
+      check_out_lng REAL,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(student_id, date)
+    );
   `);
+
+  runMigrations();
+}
+
+// Automatic migrations for existing databases
+function runMigrations() {
+  try {
+    const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+    if (!userCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
+    if (!userCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
+    if (!userCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
+
+    const staffCols = db.prepare("PRAGMA table_info(staff_attendance)").all().map(c => c.name);
+    if (!staffCols.includes('check_in_photo')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_photo TEXT;");
+    if (!staffCols.includes('check_in_lat')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_lat REAL;");
+    if (!staffCols.includes('check_in_lng')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_lng REAL;");
+    if (!staffCols.includes('check_out_photo')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_photo TEXT;");
+    if (!staffCols.includes('check_out_lat')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_lat REAL;");
+    if (!staffCols.includes('check_out_lng')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_lng REAL;");
+
+    const sessCols = db.prepare("PRAGMA table_info(attendance_sessions)").all().map(c => c.name);
+    if (!sessCols.includes('period_number')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN period_number INTEGER DEFAULT 1;");
+    if (!sessCols.includes('lesson_topic')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_topic TEXT;");
+    if (!sessCols.includes('lesson_summary')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_summary TEXT;");
+    if (!sessCols.includes('lesson_photo')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_photo TEXT;");
+
+    // Enforce official updated pincode 621301 and system controls
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('college_address', 'Palayam Road, Karur, Tamil Nadu 621301', 'Campus location address')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('college_pincode', '621301', 'Campus postal pincode')").run();
+    db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('student_qr_enabled', '0', 'Admin control: Student QR attendance toggle (1=ON, 0=OFF)')").run();
+    db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('morning_checkin_start', '08:00', 'Morning check-in start time')").run();
+    db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('morning_checkin_end', '10:00', 'Morning check-in cutoff time')").run();
+    db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('evening_checkout_start', '15:30', 'Evening check-out start time')").run();
+    db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('evening_checkout_end', '17:30', 'Evening check-out cutoff time')").run();
+  } catch (err) {
+    console.error('Migration error:', err);
+  }
 }
 
 // Log audit trail
@@ -240,7 +295,9 @@ function seedDatabase() {
   // Default Settings
   const settings = [
     ['college_name', 'Krishna College of Arts and Science (KCAS)', 'Official college name'],
-    ['college_address', 'Palayam Road, Karur, Tamil Nadu 639007', 'Campus location address'],
+    ['college_address', 'Palayam Road, Karur, Tamil Nadu 621301', 'Campus location address'],
+    ['college_pincode', '621301', 'Campus postal pincode'],
+    ['student_qr_enabled', '0', 'Admin toggle: Student self QR scan attendance (1=ON, 0=OFF)'],
     ['qr_duration_seconds', '30', 'QR code validity and rotation duration in seconds'],
     ['late_grace_minutes', '10', 'Grace period in minutes before marked Late'],
     ['absent_grace_minutes', '25', 'Cutoff in minutes after which attendance is marked Absent'],
