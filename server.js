@@ -585,7 +585,6 @@ const server = http.createServer(async (req, res) => {
           }
 
           // Location Verification (if enabled in settings)
-          const settings = getSettings();
           let locationVerified = 1;
           let distanceMeters = 0;
 
