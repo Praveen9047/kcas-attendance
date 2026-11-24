@@ -4,11 +4,11 @@
   "description": "Mobile-Friendly Attendance Management App for Krishna College of Arts and Science (KCAS), Karur",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "seed": "node db.js"
+    "start": "node --experimental-sqlite server.js",
+    "seed": "node --experimental-sqlite db.js"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.5.0"
   },
   "keywords": [
     "attendance",

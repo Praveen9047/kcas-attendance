@@ -122,13 +122,49 @@ function parseJsonBody(req) {
   });
 }
 
-// Send JSON response
+// In-Memory Brute-Force Rate Limiter for Login Security
+const loginAttempts = new Map(); // ip -> { count, lockedUntil }
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record) return { allowed: true };
+  if (record.lockedUntil && now < record.lockedUntil) {
+    const remainingSecs = Math.ceil((record.lockedUntil - now) / 1000);
+    return { allowed: false, remainingSecs };
+  }
+  if (record.lockedUntil && now >= record.lockedUntil) {
+    loginAttempts.delete(ip);
+    return { allowed: true };
+  }
+  return { allowed: true };
+}
+
+function recordFailedLogin(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip) || { count: 0, firstAttempt: now };
+  record.count += 1;
+  if (record.count >= 5) {
+    record.lockedUntil = now + (5 * 60 * 1000); // 5-minute lockout
+  }
+  loginAttempts.set(ip, record);
+}
+
+function clearLoginAttempts(ip) {
+  loginAttempts.delete(ip);
+}
+
+// Send JSON response with production security headers
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
   });
   res.end(JSON.stringify(data));
 }
@@ -186,6 +222,11 @@ const server = http.createServer(async (req, res) => {
 
       // PUBLIC / AUTH
       if (pathname === '/api/auth/login' && req.method === 'POST') {
+        const rateCheck = checkRateLimit(clientIp);
+        if (!rateCheck.allowed) {
+          return sendError(res, 429, `Too many failed login attempts. Rate limit enforced for security. Please try again in ${rateCheck.remainingSecs} seconds.`);
+        }
+
         const body = await parseJsonBody(req);
         const { username, password } = body;
         if (!username || !password) {
@@ -203,6 +244,7 @@ const server = http.createServer(async (req, res) => {
         `).get(username.trim());
 
         if (!user) {
+          recordFailedLogin(clientIp);
           return sendError(res, 401, 'Invalid username or password');
         }
 
@@ -212,8 +254,12 @@ const server = http.createServer(async (req, res) => {
 
         const isValid = verifyPassword(password, user.password_hash, user.salt);
         if (!isValid) {
+          recordFailedLogin(clientIp);
           return sendError(res, 401, 'Invalid username or password');
         }
+
+        // Reset rate limiter on successful authentication
+        clearLoginAttempts(clientIp);
 
         // Generate token
         const tokenPayload = {
@@ -1763,7 +1809,11 @@ function serveFile(filePath, res) {
     }
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': 'no-cache, must-revalidate'
+      'Cache-Control': 'no-cache, must-revalidate',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
     });
     res.end(content);
   });
