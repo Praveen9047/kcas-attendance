@@ -116,6 +116,17 @@ a:hover {
   flex-shrink: 0;
 }
 
+.college-logo-badge-img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(185, 28, 28, 0.25);
+  flex-shrink: 0;
+  background: #FFFFFF;
+  border: 2px solid #FEF2F2;
+}
+
 .college-info h1 {
   font-size: 16px;
   line-height: 1.2;
@@ -411,6 +422,18 @@ a:hover {
   justify-content: center;
   font-size: 28px;
   box-shadow: 0 6px 16px rgba(185, 28, 28, 0.3);
+}
+
+.login-college-logo {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+  border-radius: 50%;
+  display: block;
+  box-shadow: 0 6px 18px rgba(185, 28, 28, 0.25);
+  background: #FFFFFF;
+  border: 3px solid #FEE2E2;
 }
 
 .login-header h2 {
