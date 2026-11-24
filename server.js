@@ -1201,7 +1201,7 @@ const server = http.createServer(async (req, res) => {
 
           db.prepare(`
             UPDATE attendance_sessions 
-            SET status = "completed", 
+            SET status = 'completed', 
                 end_time = ?,
                 lesson_topic = COALESCE(?, lesson_topic),
                 lesson_summary = COALESCE(?, lesson_summary),
@@ -1882,7 +1882,7 @@ const server = http.createServer(async (req, res) => {
             query += ' WHERE cr.status = ?';
             params.push(status);
           }
-          query += ' ORDER BY CASE cr.status WHEN "pending" THEN 1 ELSE 2 END, cr.id DESC';
+          query += " ORDER BY CASE cr.status WHEN 'pending' THEN 1 ELSE 2 END, cr.id DESC";
           const requests = db.prepare(query).all(...params);
 
           return sendJson(res, 200, { success: true, requests });
