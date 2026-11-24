@@ -323,9 +323,9 @@ function seedDatabase() {
   `);
 
   // Admin
-  const adminAuth = hashPassword('admin123');
+  const adminAuth = hashPassword('KCASCOLLEGE2027');
   const adminRes = insertUser.run(
-    'admin',
+    'KRISHNACOLLEGEADMIN',
     adminAuth.hash,
     adminAuth.salt,
     'admin',
@@ -591,9 +591,35 @@ function seedDatabase() {
   console.log('Database successfully initialized and seeded!');
 }
 
+// Ensure the specified Admin credentials are always up to date
+function ensureAdminCredentials() {
+  const adminAuth = hashPassword('KCASCOLLEGE2027');
+  const existing = db.prepare(`
+    SELECT id, username FROM users WHERE role = 'admin' OR lower(username) = lower('KRISHNACOLLEGEADMIN') OR lower(username) = 'admin'
+  `).get();
+  
+  if (existing) {
+    db.prepare(`
+      UPDATE users 
+      SET username = 'KRISHNACOLLEGEADMIN',
+          password_hash = ?,
+          salt = ?,
+          is_active = 1,
+          full_name = 'Principal & Administrator (KCAS)'
+      WHERE id = ?
+    `).run(adminAuth.hash, adminAuth.salt, existing.id);
+  } else {
+    db.prepare(`
+      INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, designation, is_active)
+      VALUES ('KRISHNACOLLEGEADMIN', ?, ?, 'admin', 'Principal & Administrator (KCAS)', 'admin@kcas.edu.in', '9842411001', 'College Administrator', 1)
+    `).run(adminAuth.hash, adminAuth.salt);
+  }
+}
+
 // Initialize on require
 initSchema();
 seedDatabase();
+ensureAdminCredentials();
 
 module.exports = {
   db,

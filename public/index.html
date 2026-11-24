@@ -99,7 +99,7 @@
         <form id="loginForm" onsubmit="App.handleLogin(event)">
           <div class="form-group">
             <label class="form-label" for="loginUsername">Username / Register Number</label>
-            <input type="text" id="loginUsername" class="form-input" placeholder="e.g. admin or kcas24cs101" required autocomplete="username">
+            <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username or Register number" required autocomplete="username">
           </div>
 
           <div class="form-group">
@@ -111,39 +111,6 @@
             <span>Sign In to Dashboard</span>
           </button>
         </form>
-
-        <!-- Fast Demo Quick-Login Buttons -->
-        <div class="demo-role-selector">
-          <div class="demo-title">
-            <span>⚡ Quick Demo Login (Click to Test)</span>
-          </div>
-          <div class="demo-buttons-grid">
-            <button class="demo-btn" onclick="App.fillDemo('admin', 'admin123')">
-              <strong>👑 Admin</strong>
-              <small>Principal / Admin</small>
-            </button>
-            <button class="demo-btn" onclick="App.fillDemo('dr.anitha', 'staff123')">
-              <strong>👩‍🏫 Dr. M. Anitha</strong>
-              <small>HOD & CS Faculty</small>
-            </button>
-            <button class="demo-btn" onclick="App.fillDemo('prof.ramesh', 'staff123')">
-              <strong>👨‍🏫 Prof. Ramesh</strong>
-              <small>CS Faculty</small>
-            </button>
-            <button class="demo-btn" onclick="App.fillDemo('kcas24cs101', 'student123')">
-              <strong>🎓 K. Vignesh</strong>
-              <small>Student (90% Attended)</small>
-            </button>
-            <button class="demo-btn" onclick="App.fillDemo('kcas24cs102', 'student123')">
-              <strong>🎓 P. Divya</strong>
-              <small>Student (85% Attended)</small>
-            </button>
-            <button class="demo-btn" onclick="App.fillDemo('kcas24cs105', 'student123')">
-              <strong>⚠️ R. Aravind</strong>
-              <small>Student (Low Attendance 60%)</small>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
