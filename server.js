@@ -351,113 +351,14 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // Student Daily Morning Check-in with Face Photo & Campus GPS Verification
+        // Student Daily Morning Check-in (Self-marking disabled: only Staff/HOD record attendance)
         if (pathname === '/api/student/daily-checkin' && req.method === 'POST') {
-          const body = await parseJsonBody(req);
-          const { photo, latitude, longitude } = body;
-          const today = new Date().toISOString().split('T')[0];
-          const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-          if (!photo) {
-            return sendError(res, 400, 'Face Photo capture is required for daily check-in.');
-          }
-
-          // Enforce Campus Geofence
-          const settings = getSettings();
-          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
-          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
-          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
-
-          if (latitude == null || longitude == null) {
-            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
-          }
-
-          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
-          if (dist > maxRadius) {
-            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus. Attendance can only be recorded inside campus (within ${maxRadius}m).`);
-          }
-
-          const existing = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
-          if (existing && existing.check_in_time) {
-            return sendError(res, 400, `You have already checked in today at ${existing.check_in_time}`);
-          }
-
-          const [h, m] = time.split(':').map(Number);
-          const status = (h < 9 || (h === 9 && m <= 30)) ? 'on_time' : 'late';
-
-          if (existing) {
-            db.prepare(`
-              UPDATE student_daily_attendance 
-              SET check_in_time = ?, check_in_photo = ?, check_in_lat = ?, check_in_lng = ?, check_in_status = ?
-              WHERE id = ?
-            `).run(time, photo, latitude, longitude, status, existing.id);
-          } else {
-            db.prepare(`
-              INSERT INTO student_daily_attendance (student_id, date, check_in_time, check_in_photo, check_in_lat, check_in_lng, check_in_status)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(auth.id, today, time, photo, latitude, longitude, status);
-          }
-
-          logAudit(auth.id, auth.username, 'STUDENT_CHECK_IN', 'student_daily_attendance', auth.id, `Student checked in at ${time} (${status}) from ${dist}m with Face Verification`, clientIp);
-
-          return sendJson(res, 200, {
-            success: true,
-            message: `Morning Check-In recorded at ${time} (${status === 'on_time' ? 'On-Time' : 'Late'})`,
-            checkInTime: time,
-            status,
-            distanceMeters: dist
-          });
+          return sendError(res, 403, 'Student self-attendance is disabled. Attendance is recorded exclusively by Faculty & HOD.');
         }
 
-        // Student Daily Evening Check-out with Face Photo & Campus GPS Verification
+        // Student Daily Evening Check-out (Self-marking disabled: only Staff/HOD record attendance)
         if (pathname === '/api/student/daily-checkout' && req.method === 'POST') {
-          const body = await parseJsonBody(req);
-          const { photo, latitude, longitude } = body;
-          const today = new Date().toISOString().split('T')[0];
-          const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-          if (!photo) {
-            return sendError(res, 400, 'Face Photo capture is required for daily check-out.');
-          }
-
-          const existing = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
-          if (!existing || !existing.check_in_time) {
-            return sendError(res, 400, 'Please record your Morning Check-In first before Checking Out.');
-          }
-
-          if (existing.check_out_time) {
-            return sendError(res, 400, `You have already checked out today at ${existing.check_out_time}`);
-          }
-
-          // Enforce Campus Geofence
-          const settings = getSettings();
-          const campusLat = parseFloat(settings.campus_latitude || '10.9234');
-          const campusLng = parseFloat(settings.campus_longitude || '78.0772');
-          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
-
-          if (latitude == null || longitude == null) {
-            return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
-          }
-
-          const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
-          if (dist > maxRadius) {
-            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus.`);
-          }
-
-          db.prepare(`
-            UPDATE student_daily_attendance 
-            SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?
-            WHERE id = ?
-          `).run(time, photo, latitude, longitude, existing.id);
-
-          logAudit(auth.id, auth.username, 'STUDENT_CHECK_OUT', 'student_daily_attendance', auth.id, `Student checked out at ${time} from ${dist}m with Face Verification`, clientIp);
-
-          return sendJson(res, 200, {
-            success: true,
-            message: `Evening Check-Out recorded at ${time}`,
-            checkOutTime: time,
-            distanceMeters: dist
-          });
+          return sendError(res, 403, 'Student self-attendance is disabled. Attendance is recorded exclusively by Faculty & HOD.');
         }
 
         // Student Profile & Academic Details
@@ -521,133 +422,9 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, session: session || null });
         }
 
-        // Student Marks Attendance via QR Code
+        // Student Marks Attendance via QR Code (Disabled: only Staff/HOD mark attendance)
         if (pathname === '/api/student/mark-attendance' && req.method === 'POST') {
-          const settings = getSettings();
-          if (settings.student_qr_enabled !== '1') {
-            return sendError(res, 403, 'Student QR scanning is disabled by Administrator. Class period attendance is marked directly by Faculty in class.');
-          }
-
-          const body = await parseJsonBody(req);
-          const { qrToken, latitude, longitude } = body;
-
-          if (!qrToken) {
-            return sendError(res, 400, 'QR Token is required');
-          }
-
-          // Decode QR token header & payload to lookup session
-          let tokenData;
-          try {
-            const [b64] = qrToken.split('.');
-            tokenData = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
-          } catch (e) {
-            return sendError(res, 400, 'Invalid QR code format');
-          }
-
-          if (!tokenData || !tokenData.sid) {
-            return sendError(res, 400, 'Invalid QR payload data');
-          }
-
-          // Lookup session
-          const session = db.prepare(`
-            SELECT s.id, s.class_id, s.subject_id, s.staff_id, s.status, s.qr_secret, s.start_time, s.date,
-                   sub.name as subject_name, sub.code as subject_code,
-                   c.name as class_name
-            FROM attendance_sessions s
-            JOIN subjects sub ON s.subject_id = sub.id
-            JOIN classes c ON s.class_id = c.id
-            WHERE s.id = ?
-          `).get(tokenData.sid);
-
-          if (!session) {
-            return sendError(res, 404, 'Attendance session not found');
-          }
-
-          if (session.status !== 'active') {
-            return sendError(res, 400, 'This attendance session has already ended or been closed');
-          }
-
-          // Verify class enrollment
-          if (session.class_id !== auth.classId) {
-            return sendError(res, 403, `Access denied: This QR code is for ${session.class_name}, but your registered class is different.`);
-          }
-
-          // Verify cryptographic signature and expiry
-          const qrVerify = verifyQRToken(qrToken, session.qr_secret);
-          if (!qrVerify.valid) {
-            return sendError(res, 400, qrVerify.reason);
-          }
-
-          // Check if student already marked attendance for this session
-          const existing = db.prepare('SELECT id, status, marked_at FROM student_attendance WHERE session_id = ? AND student_id = ?').get(session.id, auth.id);
-          if (existing) {
-            return sendError(res, 409, `You have already marked attendance for this session on ${existing.marked_at} (Status: ${existing.status.toUpperCase()}). Duplicate submissions are blocked.`);
-          }
-
-          // Location Verification (if enabled in settings)
-          let locationVerified = 1;
-          let distanceMeters = 0;
-
-          if (settings.location_verification_enabled === '1') {
-            if (latitude == null || longitude == null) {
-              return sendError(res, 400, 'Campus Location Verification is enabled by Administrator. Please allow GPS / Location access on your device.');
-            }
-            const campusLat = parseFloat(settings.campus_latitude || '10.9234');
-            const campusLng = parseFloat(settings.campus_longitude || '78.0772');
-            const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
-
-            distanceMeters = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
-            if (distanceMeters > maxRadius) {
-              return sendError(res, 403, `Location verification failed: You are ${distanceMeters}m away from KCAS Palayam Road campus. Maximum permitted distance is ${maxRadius}m.`);
-            }
-          }
-
-          // Determine Present vs Late based on grace period
-          const lateGraceMins = parseInt(settings.late_grace_minutes || '10', 10);
-          let status = 'present';
-
-          // Compare session start_time with current time
-          try {
-            const [sh, sm] = session.start_time.split(':').map(Number);
-            const now = new Date();
-            const sessionStartMinutes = sh * 60 + sm;
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            if (nowMinutes - sessionStartMinutes > lateGraceMins) {
-              status = 'late';
-            }
-          } catch (e) {
-            status = 'present';
-          }
-
-          // Insert student attendance record
-          const insertStmt = db.prepare(`
-            INSERT INTO student_attendance (session_id, student_id, status, marked_at, marked_by, location_lat, location_lng, location_verified, notes)
-            VALUES (?, ?, ?, datetime('now', 'localtime'), 'qr_scan', ?, ?, ?, ?)
-          `);
-          
-          insertStmt.run(
-            session.id,
-            auth.id,
-            status,
-            latitude || null,
-            longitude || null,
-            locationVerified,
-            `Scanned via QR Code${distanceMeters > 0 ? ` (Distance: ${distanceMeters}m)` : ''}`
-          );
-
-          logAudit(auth.id, auth.username, 'MARK_ATTENDANCE', 'student_attendance', session.id, `Marked ${status.toUpperCase()} for ${session.subject_code} - ${session.subject_name}`, clientIp);
-
-          return sendJson(res, 200, {
-            success: true,
-            status,
-            message: status === 'present' ? 'Attendance marked successfully!' : 'Attendance marked as Late (after grace window).',
-            sessionDetails: {
-              subjectName: session.subject_name,
-              subjectCode: session.subject_code,
-              markedAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-              status
-            }
-          });
+          return sendError(res, 403, 'Student self-attendance is disabled. Class period attendance is marked directly by Faculty and HOD.');
         }
 
         // Student Attendance Stats & Low-Attendance Alerts
@@ -1448,6 +1225,10 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 400, 'Username, password, role, and full name are required');
           }
 
+          if (role === 'admin') {
+            return sendError(res, 400, 'Extra admin creation is disabled. Only one official administrator account is allowed.');
+          }
+
           const existing = db.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get(username.trim());
           if (existing) {
             return sendError(res, 409, `Username '${username}' is already taken`);
@@ -1532,6 +1313,35 @@ const server = http.createServer(async (req, res) => {
           logAudit(auth.id, auth.username, 'UPDATE_USER', 'users', targetUserId, `Updated user details for ${user.username}`, clientIp);
 
           return sendJson(res, 200, { success: true, message: 'User updated successfully' });
+        }
+
+        // Delete User (Staff / Student)
+        if (pathname.match(/^\/api\/admin\/users\/(\d+)$/) && req.method === 'DELETE') {
+          const match = pathname.match(/^\/api\/admin\/users\/(\d+)$/);
+          const targetUserId = parseInt(match[1], 10);
+
+          const targetUser = db.prepare('SELECT id, username, role, full_name FROM users WHERE id = ?').get(targetUserId);
+          if (!targetUser) return sendError(res, 404, 'User not found');
+          if (targetUser.role === 'admin' || targetUser.username.toUpperCase() === 'KRISHNACOLLEGEADMIN') {
+            return sendError(res, 400, 'The primary administrator account cannot be deleted');
+          }
+
+          // Delete all dependencies
+          db.prepare('DELETE FROM staff_attendance WHERE staff_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM student_attendance WHERE student_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM student_daily_attendance WHERE student_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM staff_allocations WHERE staff_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM timetables WHERE staff_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM correction_requests WHERE staff_id = ? OR student_id = ?').run(targetUserId, targetUserId);
+          db.prepare('DELETE FROM attendance_sessions WHERE staff_id = ?').run(targetUserId);
+          db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+
+          logAudit(auth.id, auth.username, 'DELETE_USER', 'users', targetUserId, `Deleted ${targetUser.role} user: ${targetUser.full_name} (${targetUser.username})`, clientIp);
+
+          return sendJson(res, 200, {
+            success: true,
+            message: `${targetUser.role === 'staff' ? 'Faculty Staff' : 'Student'} member '${targetUser.full_name}' deleted successfully`
+          });
         }
 
         // Bulk Import Users via CSV Text

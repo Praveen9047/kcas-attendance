@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>KCAS Attendance Management System | Krishna College of Arts and Science</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#B91C1C">
@@ -128,82 +131,25 @@
               <span class="role-tag">STUDENT</span>
             </div>
             <p id="stuProfileReg" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Reg No: KCAS24CS101</p>
-            <p id="stuProfileClass" style="font-size:13px; color:#64748B;">III B.Sc Computer Science - A • Semester 5</p>
+            <p id="stuProfileClass" style="font-size:13px; color:#64748B;">Degree Class • Semester</p>
             <p id="stuProfileCollege" style="font-size:11px; color:#94A3B8;">Krishna College of Arts and Science, Karur - 621301</p>
           </div>
-          <div id="stuScanQrActionWrapper">
-            <button id="stuScanQrBtn" class="btn btn-primary" onclick="App.openScannerModal()">
-              <span style="font-size:18px;">📷</span>
-              <span>Scan Active Class QR</span>
-            </button>
+          <div style="background:#ECFDF5; border:1px solid #A7F3D0; padding:8px 14px; border-radius:10px; font-size:12px; color:#065F46; font-weight:700;">
+            ✅ Student Portal (Read Only)
           </div>
         </div>
       </div>
 
-      <!-- Student Daily Campus Biometric Attendance Card (Face + GPS inside KCAS Campus) -->
-      <div class="card" style="border: 2px solid #E2E8F0; background: #FFFFFF;">
-        <div class="card-header" style="margin-bottom:12px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:22px;">📍</span>
-            <div>
-              <h3 class="card-title" style="margin:0;">Daily Campus Attendance (Morning & Evening)</h3>
-              <p style="font-size:12px; color:#64748B; margin:0;">Face Authentication & KCAS Palayam Road Campus GPS Geofence (PIN: 621301)</p>
-            </div>
-          </div>
-          <div class="status-badge" style="background:#ECFDF5; color:#047857; font-size:11px;">
-            📍 Campus Geofence Active (350m)
-          </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px;">
-          <!-- Morning Check-in Block -->
-          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
-            <div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:700; font-size:14px; color:#1E293B;">🌅 Morning Check-In</span>
-                <span id="stuMorningBadge" class="status-badge status-pending">Not Checked In</span>
-              </div>
-              <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Must be marked in the morning before 09:30 AM inside college campus.</p>
-              <div id="stuMorningInfo" style="font-size:12px; color:#334155; margin-bottom:12px; display:none;"></div>
-            </div>
-            <button id="stuMorningCheckInBtn" class="btn btn-primary" onclick="App.triggerStudentDailyCheckIn()">
-              <span>📸 Morning Check-In (Face + GPS)</span>
-            </button>
-          </div>
-
-          <!-- Evening Check-out Block -->
-          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
-            <div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:700; font-size:14px; color:#1E293B;">🌇 Evening Check-Out</span>
-                <span id="stuEveningBadge" class="status-badge status-pending">Not Checked Out</span>
-              </div>
-              <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Marked in the evening after 03:30 PM before leaving college campus.</p>
-              <div id="stuEveningInfo" style="font-size:12px; color:#334155; margin-bottom:12px; display:none;"></div>
-            </div>
-            <button id="stuEveningCheckOutBtn" class="btn btn-outline" onclick="App.triggerStudentDailyCheckOut()" disabled>
-              <span>📸 Evening Check-Out (Face + GPS)</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- QR Disabled Notification Banner -->
-        <div id="stuQrNoticeBanner" style="margin-top:14px; background:#FEF2F2; border:1px solid #FECDD3; border-radius:8px; padding:10px 14px; font-size:12px; color:#991B1B; display:none;">
-          <strong>ℹ️ Class Period Attendance Policy:</strong> Student QR scanning is turned OFF by KCAS Administration. Individual class period attendance is marked directly by teaching staff during each lecture.
-        </div>
-      </div>
-
-      <!-- Active Class Session Alert Card -->
-      <div id="stuActiveSessionCard" class="card" style="display:none; border:2px solid #059669; background:#ECFDF5;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <!-- Institutional Attendance Notice (Class Attendance is Marked Exclusively by Staff & HOD) -->
+      <div class="card" style="border:1px solid #FECDD3; background:linear-gradient(135deg, #FFFFFF, #FEF2F2); border-left:4px solid #B91C1C; padding:16px 20px;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <span style="font-size:28px;">📢</span>
           <div>
-            <span class="status-badge status-present" style="margin-bottom:6px;">🟢 Active Class in Progress</span>
-            <h3 id="stuActiveSubName" style="font-size:16px; color:#065F46;">Subject Name</h3>
-            <p id="stuActiveStaff" style="font-size:12px; color:#047857;">Staff: Dr. M. Anitha • Started at 09:30 AM</p>
+            <h4 style="font-size:15px; color:#B91C1C; font-weight:800; margin-bottom:4px;">Official KCAS Attendance Policy</h4>
+            <p style="font-size:13px; color:#334155; margin:0; line-height:1.5;">
+              Class period attendance is recorded directly by your course <strong>Faculty Staff & Head of Department (HOD)</strong>. Students can review their aggregated attendance performance, subject-wise status, and academic timetable below.
+            </p>
           </div>
-          <button class="btn btn-success" onclick="App.openScannerModal()">
-            <span>Scan QR Now</span>
-          </button>
         </div>
       </div>
 
@@ -783,12 +729,11 @@
 
             <!-- User Search & Role Filter -->
             <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-              <input type="text" id="adminUserSearchInput" class="form-input" style="flex:1; min-width:200px;" placeholder="Search by name, roll no, email..." oninput="App.filterAdminUsers()">
-              <select id="adminUserRoleFilter" class="form-select" style="width:auto;" onchange="App.filterAdminUsers()">
-                <option value="">All Roles</option>
-                <option value="student">Students</option>
-                <option value="staff">Faculty Staff</option>
-                <option value="admin">Administrators</option>
+              <input type="text" id="adminUserSearchInput" class="form-input" style="flex:1; min-width:200px;" placeholder="Search staff or student by name, ID, phone..." oninput="App.filterAdminUsers()">
+              <select id="adminUserRoleFilter" class="form-select" style="width:auto; font-weight:600;" onchange="App.filterAdminUsers()">
+                <option value="">All Accounts</option>
+                <option value="staff">Faculty Staff & HODs</option>
+                <option value="student">Enrolled Students</option>
               </select>
             </div>
 
@@ -1056,34 +1001,58 @@
       <form id="createUserForm" onsubmit="App.handleCreateUser(event)">
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
-            <label class="form-label" for="newRole">Role</label>
+            <label class="form-label" for="newRole">Account Role</label>
             <select id="newRole" class="form-select" required onchange="App.handleNewUserRoleChange()">
+              <option value="staff" selected>Faculty Staff / HOD</option>
               <option value="student">Student</option>
-              <option value="staff">Faculty Staff</option>
-              <option value="admin">Administrator</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="newUsername">Username / Register No</label>
-            <input type="text" id="newUsername" class="form-input" placeholder="e.g. KCAS24CS111" required>
+            <label class="form-label" for="newUsername">Username / Register No / Staff ID</label>
+            <input type="text" id="newUsername" class="form-input" placeholder="e.g. KCAS_CS_01 or KCAS24CS111" required>
           </div>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
             <label class="form-label" for="newFullName">Full Name</label>
-            <input type="text" id="newFullName" class="form-input" placeholder="e.g. S. Saravanan" required>
+            <input type="text" id="newFullName" class="form-input" placeholder="e.g. Dr. S. Saravanan" required>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="newPassword">Initial Password</label>
+            <label class="form-label" for="newPassword">Login Password</label>
             <input type="password" id="newPassword" class="form-input" value="kcas123" required>
           </div>
         </div>
 
+        <!-- Faculty Specific Fields: Designation & Department -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;" id="newUserStaffFields">
+          <div class="form-group">
+            <label class="form-label" for="newDesignation">Designation / Role</label>
+            <select id="newDesignation" class="form-select">
+              <option value="Head of Department (HOD)">Head of Department (HOD)</option>
+              <option value="Assistant Professor" selected>Assistant Professor</option>
+              <option value="Associate Professor">Associate Professor</option>
+              <option value="Professor">Professor</option>
+              <option value="Senior Lecturer">Senior Lecturer</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newUserDept">Department</label>
+            <select id="newUserDept" class="form-select">
+              <option value="1">Computer Science</option>
+              <option value="2">Computer Applications</option>
+              <option value="3">Commerce</option>
+              <option value="4">Mathematics</option>
+              <option value="5">English Literature</option>
+            </select>
+          </div>
+        </div>
+
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group" id="newUserClassGroup">
+          <div class="form-group" id="newUserClassGroup" style="display:none;">
             <label class="form-label" for="newUserClass">Class / Degree</label>
             <select id="newUserClass" class="form-select">
               <option value="">-- Select Class --</option>
@@ -1098,12 +1067,12 @@
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
-            <label class="form-label" for="newPhone">Student / Staff Phone Number</label>
+            <label class="form-label" for="newPhone">Staff / Student Mobile Number</label>
             <input type="tel" id="newPhone" class="form-input" placeholder="e.g. 9876543210" required>
           </div>
 
-          <div class="form-group" id="newUserParentPhoneGroup">
-            <label class="form-label" for="newParentPhone">Parents Phone Number</label>
+          <div class="form-group" id="newUserParentPhoneGroup" style="display:none;">
+            <label class="form-label" for="newParentPhone">Parents Mobile Number</label>
             <input type="tel" id="newParentPhone" class="form-input" placeholder="e.g. 9842100001">
           </div>
         </div>

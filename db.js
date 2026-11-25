@@ -373,13 +373,13 @@ function seedDatabase() {
     subjectIds[code] = Number(res.lastInsertRowid);
   }
 
-  // Insert Users (Admin, Staff, Students)
+  // Insert Single Primary Admin User
   const insertUser = db.prepare(`
     INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, class_id, register_number, designation, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
-  // Admin
+  // Admin (Sole Administrator)
   const adminAuth = hashPassword('KCASCOLLEGE2027');
   const adminRes = insertUser.run(
     'KRISHNACOLLEGEADMIN',
@@ -389,270 +389,68 @@ function seedDatabase() {
     'Principal & Administrator (KCAS)',
     'admin@kcas.edu.in',
     '9842411001',
-    deptIds['CS'],
+    deptIds['CS'] || null,
     null,
     null,
     'College Administrator'
   );
   const adminId = Number(adminRes.lastInsertRowid);
 
-  // Staff
-  const staffMembers = [
-    {
-      username: 'dr.anitha',
-      password: 'staff123',
-      name: 'Dr. M. Anitha',
-      email: 'anitha.cs@kcas.edu.in',
-      phone: '9842422001',
-      dept: deptIds['CS'],
-      designation: 'Associate Professor & HOD'
-    },
-    {
-      username: 'prof.ramesh',
-      password: 'staff123',
-      name: 'Prof. S. Ramesh',
-      email: 'ramesh.cs@kcas.edu.in',
-      phone: '9842422002',
-      dept: deptIds['CS'],
-      designation: 'Assistant Professor'
-    },
-    {
-      username: 'prof.priya',
-      password: 'staff123',
-      name: 'Prof. K. Priya',
-      email: 'priya.cs@kcas.edu.in',
-      phone: '9842422003',
-      dept: deptIds['CS'],
-      designation: 'Assistant Professor'
-    },
-    {
-      username: 'prof.suresh',
-      password: 'staff123',
-      name: 'Prof. T. Suresh',
-      email: 'suresh.math@kcas.edu.in',
-      phone: '9842422004',
-      dept: deptIds['MATH'],
-      designation: 'Assistant Professor'
-    }
-  ];
-
-  const staffIds = {};
-  for (const s of staffMembers) {
-    const auth = hashPassword(s.password);
-    const res = insertUser.run(
-      s.username,
-      auth.hash,
-      auth.salt,
-      'staff',
-      s.name,
-      s.email,
-      s.phone,
-      s.dept,
-      null,
-      null,
-      s.designation
-    );
-    staffIds[s.username] = Number(res.lastInsertRowid);
-  }
-
-  // Students (III B.Sc CS - A)
-  const students = [
-    { username: 'kcas24cs101', name: 'K. Vignesh', reg: 'KCAS24CS101', email: 'vignesh.cs101@kcas.edu.in', phone: '9789123001' },
-    { username: 'kcas24cs102', name: 'P. Divya', reg: 'KCAS24CS102', email: 'divya.cs102@kcas.edu.in', phone: '9789123002' },
-    { username: 'kcas24cs103', name: 'M. Karthik', reg: 'KCAS24CS103', email: 'karthik.cs103@kcas.edu.in', phone: '9789123003' },
-    { username: 'kcas24cs104', name: 'S. Sneha', reg: 'KCAS24CS104', email: 'sneha.cs104@kcas.edu.in', phone: '9789123004' },
-    { username: 'kcas24cs105', name: 'R. Aravind', reg: 'KCAS24CS105', email: 'aravind.cs105@kcas.edu.in', phone: '9789123005' },
-    { username: 'kcas24cs106', name: 'T. Kavitha', reg: 'KCAS24CS106', email: 'kavitha.cs106@kcas.edu.in', phone: '9789123006' },
-    { username: 'kcas24cs107', name: 'B. Praveen', reg: 'KCAS24CS107', email: 'praveen.cs107@kcas.edu.in', phone: '9789123007' },
-    { username: 'kcas24cs108', name: 'A. Meena', reg: 'KCAS24CS108', email: 'meena.cs108@kcas.edu.in', phone: '9789123008' },
-    { username: 'kcas24cs109', name: 'G. Naveen', reg: 'KCAS24CS109', email: 'naveen.cs109@kcas.edu.in', phone: '9789123009' },
-    { username: 'kcas24cs110', name: 'J. Soundarya', reg: 'KCAS24CS110', email: 'soundarya.cs110@kcas.edu.in', phone: '9789123010' }
-  ];
-
-  const studentIds = [];
-  const targetClassId = classIds['III B.Sc CS - A'];
-  for (const stu of students) {
-    const auth = hashPassword('student123');
-    const res = insertUser.run(
-      stu.username,
-      auth.hash,
-      auth.salt,
-      'student',
-      stu.name,
-      stu.email,
-      stu.phone,
-      deptIds['CS'],
-      targetClassId,
-      stu.reg,
-      'Student'
-    );
-    studentIds.push({ id: Number(res.lastInsertRowid), ...stu });
-  }
-
-  // Staff Allocations
-  const insertAlloc = db.prepare(`
-    INSERT INTO staff_allocations (staff_id, class_id, subject_id, academic_year)
-    VALUES (?, ?, ?, ?)
-  `);
-  insertAlloc.run(staffIds['dr.anitha'], targetClassId, subjectIds['CS501'], '2026-2027');
-  insertAlloc.run(staffIds['prof.ramesh'], targetClassId, subjectIds['CS502'], '2026-2027');
-  insertAlloc.run(staffIds['prof.priya'], targetClassId, subjectIds['CS503'], '2026-2027');
-  insertAlloc.run(staffIds['dr.anitha'], targetClassId, subjectIds['CS504'], '2026-2027');
-  insertAlloc.run(staffIds['prof.ramesh'], targetClassId, subjectIds['CS505'], '2026-2027');
-
-  // Timetable
-  const insertTimetable = db.prepare(`
-    INSERT INTO timetables (class_id, subject_id, staff_id, day_of_week, period_number, start_time, end_time, room_number)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  for (const d of days) {
-    insertTimetable.run(targetClassId, subjectIds['CS501'], staffIds['dr.anitha'], d, 1, '09:30', '10:30', 'Lab-1');
-    insertTimetable.run(targetClassId, subjectIds['CS502'], staffIds['prof.ramesh'], d, 2, '10:30', '11:30', 'Room 204');
-    insertTimetable.run(targetClassId, subjectIds['CS503'], staffIds['prof.priya'], d, 3, '11:45', '12:45', 'Room 204');
-    insertTimetable.run(targetClassId, subjectIds['CS504'], staffIds['dr.anitha'], d, 4, '13:30', '14:30', 'Lab-2');
-    insertTimetable.run(targetClassId, subjectIds['CS505'], staffIds['prof.ramesh'], d, 5, '14:30', '15:30', 'Room 204');
-  }
-
-  // Holidays
-  const insertHoliday = db.prepare('INSERT INTO holidays (title, date, description) VALUES (?, ?, ?)');
-  insertHoliday.run('Pongal Festival', '2026-01-14', 'State festival holiday');
-  insertHoliday.run('Republic Day', '2026-01-26', 'National Holiday');
-  insertHoliday.run('Tamil New Year', '2026-04-14', 'Regional celebration');
-  insertHoliday.run('College Sports Day', '2026-08-28', 'Annual sports meet');
-
-  // Staff check-ins for Dr. Anitha and Prof. Ramesh for today and past days
-  const todayStr = new Date().toISOString().split('T')[0];
-  const insertStaffAtt = db.prepare(`
-    INSERT INTO staff_attendance (staff_id, date, check_in_time, check_out_time, status, working_hours, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  insertStaffAtt.run(staffIds['dr.anitha'], todayStr, '09:12', null, 'on_time', 0, 'Morning check-in');
-  insertStaffAtt.run(staffIds['prof.ramesh'], todayStr, '09:38', null, 'late', 0, 'Late by 8 mins (traffic on Salem highway)');
-  insertStaffAtt.run(staffIds['prof.priya'], todayStr, '09:10', null, 'on_time', 0, 'On-time check-in');
-
-  // Insert Historical Sessions and Student Attendance for the past 2 weeks
-  const insertSession = db.prepare(`
-    INSERT INTO attendance_sessions (session_uuid, class_id, subject_id, staff_id, date, start_time, end_time, status, qr_secret, topic)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertStuAtt = db.prepare(`
-    INSERT INTO student_attendance (session_id, student_id, status, marked_at, marked_by, location_verified)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  // Generate 10 past sessions across subjects
-  const sessionList = [
-    { daysAgo: 14, sub: 'CS501', staff: staffIds['dr.anitha'], time: '09:30', topic: 'DOM Manipulation & Event Listeners' },
-    { daysAgo: 13, sub: 'CS502', staff: staffIds['prof.ramesh'], time: '10:30', topic: 'Relational Algebra & Normalization' },
-    { daysAgo: 12, sub: 'CS503', staff: staffIds['prof.priya'], time: '11:45', topic: 'NumPy Arrays & Data Frames' },
-    { daysAgo: 11, sub: 'CS501', staff: staffIds['dr.anitha'], time: '09:30', topic: 'RESTful API Design in Node.js' },
-    { daysAgo: 10, sub: 'CS504', staff: staffIds['dr.anitha'], time: '13:30', topic: 'TCP/IP Model and Handshake' },
-    { daysAgo: 7, sub: 'CS502', staff: staffIds['prof.ramesh'], time: '10:30', topic: 'Indexing and Query Optimization' },
-    { daysAgo: 6, sub: 'CS503', staff: staffIds['prof.priya'], time: '11:45', topic: 'Scikit-learn Regressors' },
-    { daysAgo: 5, sub: 'CS505', staff: staffIds['prof.ramesh'], time: '14:30', topic: 'Docker Containers & Images' },
-    { daysAgo: 2, sub: 'CS501', staff: staffIds['dr.anitha'], time: '09:30', topic: 'Full Stack Frontend Architecture' },
-    { daysAgo: 1, sub: 'CS502', staff: staffIds['prof.ramesh'], time: '10:30', topic: 'Transactions and ACID Properties' }
-  ];
-
-  let sampleCorrectionSessionId = null;
-  let sampleCorrectionStudentId = null;
-
-  for (const s of sessionList) {
-    const d = new Date();
-    d.setDate(d.getDate() - s.daysAgo);
-    const dateStr = d.toISOString().split('T')[0];
-    const uuid = crypto.randomUUID();
-    const qrSecret = crypto.randomBytes(16).toString('hex');
-
-    const sRes = insertSession.run(
-      uuid,
-      targetClassId,
-      subjectIds[s.sub],
-      s.staff,
-      dateStr,
-      s.time,
-      '10:30',
-      'completed',
-      qrSecret,
-      s.topic
-    );
-    const sessId = Number(sRes.lastInsertRowid);
-
-    // Populate attendance for all 10 students
-    studentIds.forEach((stu, idx) => {
-      let status = 'present';
-      // Make R. Aravind (idx 4) have low attendance (frequent absents)
-      if (idx === 4 && (s.daysAgo % 2 === 0)) {
-        status = 'absent';
-      } else if (idx === 6 && s.daysAgo === 5) {
-        status = 'late';
-      } else if (idx === 2 && s.daysAgo === 1) {
-        status = 'absent';
-        sampleCorrectionSessionId = sessId;
-        sampleCorrectionStudentId = stu.id;
-      }
-
-      insertStuAtt.run(
-        sessId,
-        stu.id,
-        status,
-        `${dateStr} ${s.time}:15`,
-        'qr_scan',
-        1
-      );
-    });
-  }
-
-  // Active Session for Today (Dr. Anitha's CS501 Class)
-  const activeUuid = crypto.randomUUID();
-  const activeSecret = crypto.randomBytes(16).toString('hex');
-  const activeSessRes = insertSession.run(
-    activeUuid,
-    targetClassId,
-    subjectIds['CS501'],
-    staffIds['dr.anitha'],
-    todayStr,
-    '09:30',
-    null,
-    'active',
-    activeSecret,
-    'Modern Single Page Application Architecture & QR Attendance'
-  );
-  const activeSessId = Number(activeSessRes.lastInsertRowid);
-
-  // 3 students already scanned for today's active session
-  insertStuAtt.run(activeSessId, studentIds[0].id, 'present', `${todayStr} 09:32:10`, 'qr_scan', 1);
-  insertStuAtt.run(activeSessId, studentIds[1].id, 'present', `${todayStr} 09:33:45`, 'qr_scan', 1);
-  insertStuAtt.run(activeSessId, studentIds[3].id, 'late', `${todayStr} 09:41:02`, 'qr_scan', 1);
-
-  // Insert a sample pending correction request for Admin to review
-  if (sampleCorrectionSessionId && sampleCorrectionStudentId) {
-    const insertCorr = db.prepare(`
-      INSERT INTO correction_requests (staff_id, session_id, student_id, original_status, requested_status, reason, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
-    `);
-    insertCorr.run(
-      staffIds['prof.ramesh'],
-      sampleCorrectionSessionId,
-      sampleCorrectionStudentId,
-      'absent',
-      'present',
-      'Student M. Karthik was present in class but camera lens was damaged, preventing QR scan. Verified physical presence in Lab.'
-    );
-  }
-
   // Initial audit log
-  logAudit(adminId, 'admin', 'SYSTEM_INIT', 'system', '1', 'Initial database schema initialized and seeded with KCAS college records');
+  logAudit(adminId, 'KRISHNACOLLEGEADMIN', 'SYSTEM_INIT', 'system', '1', 'Initial database schema initialized with official KCAS administrator and academic departments');
 
-  console.log('Database successfully initialized and seeded!');
+  console.log('Database successfully initialized with official KCAS structure (0 dummy users)!');
 }
 
-// Ensure the specified Admin credentials are always up to date
+// Clean up all dummy/test accounts and ensure strictly ONE official admin
+function cleanupDummyData() {
+  try {
+    const dummyUsernames = [
+      'dr.anitha', 'prof.ramesh', 'prof.priya', 'prof.suresh',
+      'kcas24cs101', 'kcas24cs102', 'kcas24cs103', 'kcas24cs104', 'kcas24cs105',
+      'kcas24cs106', 'kcas24cs107', 'kcas24cs108', 'kcas24cs109', 'kcas24cs110',
+      'admin'
+    ];
+
+    const placeholders = dummyUsernames.map(() => '?').join(',');
+    const dummyRows = db.prepare(`
+      SELECT id FROM users 
+      WHERE lower(username) IN (${placeholders}) 
+         OR (role = 'admin' AND upper(username) != 'KRISHNACOLLEGEADMIN')
+    `).all(...dummyUsernames);
+
+    const dummyIds = dummyRows.map(r => r.id);
+
+    if (dummyIds.length > 0) {
+      const idPlaceholders = dummyIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM student_attendance WHERE student_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM student_daily_attendance WHERE student_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM staff_attendance WHERE staff_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM correction_requests WHERE staff_id IN (${idPlaceholders}) OR student_id IN (${idPlaceholders})`).run(...dummyIds, ...dummyIds);
+      db.prepare(`DELETE FROM staff_allocations WHERE staff_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM timetables WHERE staff_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM attendance_sessions WHERE staff_id IN (${idPlaceholders})`).run(...dummyIds);
+      db.prepare(`DELETE FROM users WHERE id IN (${idPlaceholders})`).run(...dummyIds);
+      console.log(`Cleaned up ${dummyIds.length} dummy users and test data.`);
+    }
+
+    // Strictly ensure no extra admin accounts exist
+    db.prepare("DELETE FROM users WHERE role = 'admin' AND upper(username) != 'KRISHNACOLLEGEADMIN'").run();
+
+  } catch (err) {
+    console.error('Error in cleanupDummyData:', err);
+  }
+}
+
+// Ensure the specified Admin credentials are always up to date and strictly single admin
 function ensureAdminCredentials() {
   const adminAuth = hashPassword('KCASCOLLEGE2027');
+
+  // Purge any extra admin accounts
+  db.prepare("DELETE FROM users WHERE role = 'admin' AND upper(username) != 'KRISHNACOLLEGEADMIN'").run();
+
   const existing = db.prepare(`
-    SELECT id, username FROM users WHERE role = 'admin' OR lower(username) = lower('KRISHNACOLLEGEADMIN') OR lower(username) = 'admin'
+    SELECT id, username FROM users WHERE upper(username) = 'KRISHNACOLLEGEADMIN'
   `).get();
   
   if (existing) {
@@ -661,8 +459,12 @@ function ensureAdminCredentials() {
       SET username = 'KRISHNACOLLEGEADMIN',
           password_hash = ?,
           salt = ?,
+          role = 'admin',
           is_active = 1,
-          full_name = 'Principal & Administrator (KCAS)'
+          full_name = 'Principal & Administrator (KCAS)',
+          email = 'admin@kcas.edu.in',
+          phone = '9842411001',
+          designation = 'College Administrator'
       WHERE id = ?
     `).run(adminAuth.hash, adminAuth.salt, existing.id);
   } else {
@@ -676,6 +478,7 @@ function ensureAdminCredentials() {
 // Initialize on require
 initSchema();
 seedDatabase();
+cleanupDummyData();
 ensureAdminCredentials();
 
 module.exports = {

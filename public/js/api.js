@@ -230,6 +230,12 @@ const API = {
     });
   },
 
+  async deleteAdminUser(userId) {
+    return this.request(`/api/admin/users/${userId}`, {
+      method: 'DELETE'
+    });
+  },
+
   async importUsersCsv(csvData, defaultRole) {
     return this.request('/api/admin/users/import-csv', {
       method: 'POST',

@@ -158,18 +158,14 @@ const App = {
     if (role === 'student') {
       desktopTabs.innerHTML = `
         <button class="tab-btn active" onclick="App.switchStudentTab('dashboard')">📊 My Attendance</button>
-        <button class="tab-btn" onclick="App.openScannerModal()">📷 Scan Active QR</button>
         <button class="tab-btn" onclick="App.switchStudentTab('timetable')">📅 Timetable</button>
       `;
       mobileNav.innerHTML = `
         <button class="mobile-nav-item active" onclick="App.switchStudentTab('dashboard')">
-          <span class="icon">📊</span><span>Dashboard</span>
+          <span class="icon">📊</span><span>Attendance</span>
         </button>
-        <button class="mobile-nav-item" onclick="App.openScannerModal()">
-          <span class="icon">📷</span><span>Scan QR</span>
-        </button>
-        <button class="mobile-nav-item" onclick="App.switchStudentTab('history')">
-          <span class="icon">🕒</span><span>History</span>
+        <button class="mobile-nav-item" onclick="App.switchStudentTab('timetable')">
+          <span class="icon">📅</span><span>Timetable</span>
         </button>
       `;
     } else if (role === 'staff') {
@@ -229,21 +225,17 @@ const App = {
         document.getElementById('stuProfileClass').textContent = `${pRes.profile.class_name || 'Class'} • Semester ${pRes.profile.semester || 5}`;
       }
 
-      // 2. Public Settings & Admin QR Control Policy
+      // 2. Public Settings & Policy
       const pubInfo = await API.getPublicInfo().catch(() => ({}));
       const qrEnabled = pubInfo.studentQrEnabled === true;
       const scanBtnWrapper = document.getElementById('stuScanQrActionWrapper');
       const qrNotice = document.getElementById('stuQrNoticeBanner');
-      if (scanBtnWrapper) {
-        scanBtnWrapper.style.display = qrEnabled ? 'block' : 'none';
-      }
-      if (qrNotice) {
-        qrNotice.style.display = qrEnabled ? 'none' : 'block';
-      }
+      if (scanBtnWrapper) scanBtnWrapper.style.display = qrEnabled ? 'block' : 'none';
+      if (qrNotice) qrNotice.style.display = qrEnabled ? 'none' : 'block';
 
-      // 3. Daily Campus Attendance Status (Morning Check-In / Evening Check-Out)
+      // 3. Daily Campus Status (if card present)
       try {
-        const dailyRes = await API.getStudentDailyStatus();
+        const dailyRes = await API.getStudentDailyStatus().catch(() => null);
         const morningBadge = document.getElementById('stuMorningBadge');
         const morningInfo = document.getElementById('stuMorningInfo');
         const morningBtn = document.getElementById('stuMorningCheckInBtn');
@@ -251,34 +243,44 @@ const App = {
         const eveningInfo = document.getElementById('stuEveningInfo');
         const eveningBtn = document.getElementById('stuEveningCheckOutBtn');
 
-        if (dailyRes && dailyRes.record) {
+        if (dailyRes && dailyRes.record && morningBadge) {
           const rec = dailyRes.record;
           if (rec.check_in_time) {
             morningBadge.className = `status-badge status-${rec.check_in_status || 'present'}`;
             morningBadge.textContent = `Checked In (${(rec.check_in_status || 'on_time').toUpperCase()})`;
-            morningInfo.style.display = 'block';
-            morningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_in_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
-            morningBtn.disabled = true;
-            morningBtn.innerHTML = '<span>✓ Morning Checked In</span>';
-            eveningBtn.disabled = false;
+            if (morningInfo) {
+              morningInfo.style.display = 'block';
+              morningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_in_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
+            }
+            if (morningBtn) {
+              morningBtn.disabled = true;
+              morningBtn.innerHTML = '<span>✓ Morning Checked In</span>';
+            }
+            if (eveningBtn) eveningBtn.disabled = false;
           } else {
             morningBadge.className = 'status-badge status-pending';
             morningBadge.textContent = 'Not Checked In';
-            morningBtn.disabled = false;
-            eveningBtn.disabled = true;
+            if (morningBtn) {
+              morningBtn.disabled = false;
+            }
+            if (eveningBtn) eveningBtn.disabled = true;
           }
 
-          if (rec.check_out_time) {
+          if (rec.check_out_time && eveningBadge) {
             eveningBadge.className = 'status-badge status-present';
             eveningBadge.textContent = 'Checked Out';
-            eveningInfo.style.display = 'block';
-            eveningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_out_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
-            eveningBtn.disabled = true;
-            eveningBtn.innerHTML = '<span>✓ Evening Checked Out</span>';
+            if (eveningInfo) {
+              eveningInfo.style.display = 'block';
+              eveningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_out_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
+            }
+            if (eveningBtn) {
+              eveningBtn.disabled = true;
+              eveningBtn.innerHTML = '<span>✓ Evening Checked Out</span>';
+            }
           }
         }
       } catch (e) {
-        console.error('Error fetching student daily status:', e);
+        // Handled silently
       }
 
       // 4. Check for active session
@@ -1289,30 +1291,62 @@ const App = {
   renderAdminUsersTable(users) {
     const tbody = document.getElementById('adminUsersTableBody');
     if (!users || users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#64748B;">No users found matching query.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:16px; color:#64748B;">No user accounts found. Click "Add User" above to add Staff or Students.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td>
-          <img src="${u.photo_url || '/icons/college-logo.png'}" class="user-avatar-thumb" alt="${u.full_name}">
-        </td>
-        <td><strong>${u.register_number || u.username}</strong></td>
-        <td>${u.full_name}</td>
-        <td><span class="role-tag" style="background:${u.role==='admin'?'#0F172A':(u.role==='staff'?'#B91C1C':'#059669')};">${u.role.toUpperCase()}</span></td>
-        <td>${u.class_name || u.department_name || '-'}</td>
-        <td style="font-size:12px;">${u.phone || '-'}</td>
-        <td style="font-size:12px; color:#B91C1C; font-weight:700;">${u.parent_phone || '-'}</td>
-        <td style="font-size:11px; max-width:180px; color:#475569;">${u.address || '-'}</td>
-        <td><span class="status-badge ${u.is_active ? 'status-present' : 'status-absent'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
-        <td>
-          <button class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:11px;" onclick="App.toggleUserStatus(${u.id}, ${u.is_active ? 0 : 1})">
-            ${u.is_active ? 'Deactivate' : 'Activate'}
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = users.map(u => {
+      const isAdmin = u.role === 'admin' || (u.username && u.username.toUpperCase() === 'KRISHNACOLLEGEADMIN');
+      const isStaff = u.role === 'staff';
+      const roleLabel = isAdmin ? 'SOLE ADMIN' : (isStaff ? (u.designation || 'STAFF') : 'STUDENT');
+      const roleBg = isAdmin ? '#0F172A' : (isStaff ? '#B91C1C' : '#059669');
+      const escapedName = (u.full_name || '').replace(/'/g, "\\'");
+
+      return `
+        <tr>
+          <td>
+            <img src="${u.photo_url || '/icons/college-logo.png'}" class="user-avatar-thumb" alt="${u.full_name}">
+          </td>
+          <td><strong>${u.register_number || u.username}</strong></td>
+          <td style="font-weight:600;">${u.full_name}</td>
+          <td><span class="role-tag" style="background:${roleBg};">${roleLabel.toUpperCase()}</span></td>
+          <td>${u.class_name || u.department_name || '-'}</td>
+          <td style="font-size:12px; font-weight:600;">${u.phone || '-'}</td>
+          <td style="font-size:12px; color:#B91C1C; font-weight:700;">${u.parent_phone || '-'}</td>
+          <td style="font-size:11px; max-width:180px; color:#475569;">${u.address || '-'}</td>
+          <td><span class="status-badge ${u.is_active ? 'status-present' : 'status-absent'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            ${isAdmin ? `
+              <span style="font-size:11px; color:#64748B; font-weight:700;">Primary Admin</span>
+            ` : `
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px;" onclick="App.toggleUserStatus(${u.id}, ${u.is_active ? 0 : 1})">
+                  ${u.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button class="btn btn-danger btn-sm" style="padding:3px 8px; font-size:11px; font-weight:700;" onclick="App.handleDeleteUser(${u.id}, '${escapedName}', '${u.role}')" title="Delete user">
+                  🗑️ Remove
+                </button>
+              </div>
+            `}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async handleDeleteUser(userId, fullName, role) {
+    const label = role === 'staff' ? 'Faculty Staff / HOD' : 'Student';
+    if (!confirm(`Are you sure you want to permanently delete ${label} "${fullName}"?\n\nThis will remove their profile and all related attendance records.`)) {
+      return;
+    }
+    try {
+      const res = await API.deleteAdminUser(userId);
+      this.showToast(res.message || 'User deleted successfully', 'success');
+      this.loadAdminUsers();
+      this.loadAdminDashboard();
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    }
   },
 
   async toggleUserStatus(userId, newStatus) {
@@ -1329,6 +1363,7 @@ const App = {
     this.newUserPhotoBase64 = null;
     const preview = document.getElementById('newUserPhotoPreview');
     if (preview) preview.style.display = 'none';
+    this.handleNewUserRoleChange();
     document.getElementById('createUserModal').style.display = 'flex';
   },
 
@@ -1338,9 +1373,13 @@ const App = {
 
   handleNewUserRoleChange() {
     const role = document.getElementById('newRole').value;
-    document.getElementById('newUserClassGroup').style.display = role === 'student' ? 'block' : 'none';
+    const isStudent = role === 'student';
+    const classGroup = document.getElementById('newUserClassGroup');
+    if (classGroup) classGroup.style.display = isStudent ? 'block' : 'none';
     const parentPhoneGroup = document.getElementById('newUserParentPhoneGroup');
-    if (parentPhoneGroup) parentPhoneGroup.style.display = role === 'student' ? 'block' : 'none';
+    if (parentPhoneGroup) parentPhoneGroup.style.display = isStudent ? 'block' : 'none';
+    const staffFields = document.getElementById('newUserStaffFields');
+    if (staffFields) staffFields.style.display = isStudent ? 'none' : 'grid';
   },
 
   async handleCreateUser(e) {
@@ -1351,6 +1390,8 @@ const App = {
     const fullName = document.getElementById('newFullName').value.trim();
     const password = document.getElementById('newPassword').value.trim();
     const classId = document.getElementById('newUserClass')?.value;
+    const deptId = document.getElementById('newUserDept')?.value;
+    const designation = role === 'staff' ? (document.getElementById('newDesignation')?.value || 'Assistant Professor') : 'Student';
     const email = document.getElementById('newEmail')?.value.trim();
     const phone = document.getElementById('newPhone')?.value.trim();
     const parentPhone = document.getElementById('newParentPhone')?.value.trim();
@@ -1363,21 +1404,24 @@ const App = {
         username,
         fullName,
         password,
-        classId: classId ? parseInt(classId, 10) : null,
+        departmentId: role === 'staff' && deptId ? parseInt(deptId, 10) : null,
+        classId: role === 'student' && classId ? parseInt(classId, 10) : null,
+        designation,
         email,
         phone,
-        parentPhone,
+        parentPhone: role === 'student' ? parentPhone : null,
         address,
         photoUrl,
         registerNumber: role === 'student' ? username.toUpperCase() : null
       });
-      this.showToast('User registered successfully!', 'success');
+      this.showToast(`${role === 'staff' ? 'Staff' : 'Student'} account registered successfully!`, 'success');
       this.newUserPhotoBase64 = null;
       document.getElementById('createUserForm').reset();
       const preview = document.getElementById('newUserPhotoPreview');
       if (preview) preview.style.display = 'none';
       this.closeCreateUserModal();
       this.loadAdminUsers();
+      this.loadAdminDashboard();
     } catch (err) {
       this.showToast(err.message, 'error');
     }
