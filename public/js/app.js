@@ -155,42 +155,28 @@ const App = {
     document.getElementById('desktopNavWrapper').style.display = 'block';
     mobileNav.style.display = 'flex';
 
-    if (role === 'student') {
+    if (role === 'staff') {
       desktopTabs.innerHTML = `
-        <button class="tab-btn active" onclick="App.switchStudentTab('dashboard')">📊 My Attendance</button>
-        <button class="tab-btn" onclick="App.switchStudentTab('timetable')">📅 Timetable</button>
-      `;
-      mobileNav.innerHTML = `
-        <button class="mobile-nav-item active" onclick="App.switchStudentTab('dashboard')">
-          <span class="icon">📊</span><span>Attendance</span>
-        </button>
-        <button class="mobile-nav-item" onclick="App.switchStudentTab('timetable')">
-          <span class="icon">📅</span><span>Timetable</span>
-        </button>
-      `;
-    } else if (role === 'staff') {
-      desktopTabs.innerHTML = `
-        <button class="tab-btn active" onclick="App.switchStaffTab('overview')">🏫 Classes & QR Broadcast</button>
+        <button class="tab-btn active" onclick="App.switchStaffTab('duty')">📝 Class Period Duty Logs</button>
         <button class="tab-btn" onclick="App.switchStaffTab('checkin')">⏱️ Daily Check-in</button>
-        <button class="tab-btn" onclick="App.switchStaffTab('corrections')">📝 Correction Requests</button>
+        <button class="tab-btn" onclick="App.switchStaffTab('history')">📅 Monthly History</button>
       `;
       mobileNav.innerHTML = `
-        <button class="mobile-nav-item active" onclick="App.switchStaffTab('overview')">
-          <span class="icon">🏫</span><span>Sessions</span>
+        <button class="mobile-nav-item active" onclick="App.switchStaffTab('duty')">
+          <span class="icon">📝</span><span>Duty Logs</span>
         </button>
-        <button class="mobile-nav-item" onclick="App.handleStaffCheckIn()">
+        <button class="mobile-nav-item" onclick="App.triggerStaffDailyCheckIn()">
           <span class="icon">⏱️</span><span>Check In</span>
         </button>
-        <button class="mobile-nav-item" onclick="App.switchStaffTab('corrections')">
-          <span class="icon">📝</span><span>Corrections</span>
+        <button class="mobile-nav-item" onclick="App.switchStaffTab('history')">
+          <span class="icon">📅</span><span>History</span>
         </button>
       `;
     } else if (role === 'admin') {
       desktopTabs.innerHTML = `
         <button class="tab-btn active" onclick="App.switchAdminTab('overview')">📊 Overview</button>
-        <button class="tab-btn" onclick="App.switchAdminTab('users')">👥 Users & Import</button>
-        <button class="tab-btn" onclick="App.switchAdminTab('records')">🔍 Attendance Records</button>
-        <button class="tab-btn" onclick="App.switchAdminTab('corrections')">⚖️ Correction Requests</button>
+        <button class="tab-btn" onclick="App.switchAdminTab('users')">👥 Faculty Staff & HODs</button>
+        <button class="tab-btn" onclick="App.switchAdminTab('periodlogs')">🏫 Period Duty Logs</button>
         <button class="tab-btn" onclick="App.switchAdminTab('academics')">🏛️ Academics</button>
         <button class="tab-btn" onclick="App.switchAdminTab('settings')">⚙️ Settings</button>
         <button class="tab-btn" onclick="App.switchAdminTab('audit')">📜 Audit Trail</button>
@@ -199,16 +185,20 @@ const App = {
         <button class="mobile-nav-item active" onclick="App.switchAdminTab('overview')">
           <span class="icon">📊</span><span>Dashboard</span>
         </button>
-        <button class="mobile-nav-item" onclick="App.switchAdminTab('records')">
-          <span class="icon">🔍</span><span>Records</span>
-        </button>
-        <button class="mobile-nav-item" onclick="App.switchAdminTab('corrections')">
-          <span class="icon">⚖️</span><span>Corrections</span>
+        <button class="mobile-nav-item" onclick="App.switchAdminTab('periodlogs')">
+          <span class="icon">🏫</span><span>Period Logs</span>
         </button>
         <button class="mobile-nav-item" onclick="App.switchAdminTab('users')">
-          <span class="icon">👥</span><span>Users</span>
+          <span class="icon">👥</span><span>Staff</span>
+        </button>
+        <button class="mobile-nav-item" onclick="App.switchAdminTab('audit')">
+          <span class="icon">📜</span><span>Audit</span>
         </button>
       `;
+    } else {
+      desktopTabs.innerHTML = '';
+      mobileNav.style.display = 'none';
+      document.getElementById('desktopNavWrapper').style.display = 'none';
     }
   },
 
@@ -656,6 +646,9 @@ const App = {
   // -------------------------------------------------------------
   // STAFF CONTROLLERS
   // -------------------------------------------------------------
+  staffDutyPhotoBase64: null,
+  academicData: null,
+
   async loadStaffDashboard() {
     try {
       const res = await API.getStaffDashboard();
@@ -663,6 +656,9 @@ const App = {
       // Profile
       document.getElementById('staffProfileName').textContent = this.currentUser.full_name;
       document.getElementById('staffProfileDesig').textContent = this.currentUser.designation || 'Faculty Member';
+      if (this.currentUser.department_name) {
+        document.getElementById('staffProfileDept').textContent = `${this.currentUser.department_name} • KCAS Karur (PIN: 621301)`;
+      }
 
       // Check-in status
       const statusBox = document.getElementById('staffCheckInStatusDisplay');
@@ -684,407 +680,185 @@ const App = {
         checkOutBtn.disabled = true;
       }
 
-      // Populate Class and Subject dropdowns for session creation
-      const classSelect = document.getElementById('sessionClassSelect');
-      const corrClassSelect = document.getElementById('corrClassSelect');
-      
-      if (res.allocations) {
-        // Unique classes
-        const uniqueClasses = [];
-        res.allocations.forEach(a => {
-          if (!uniqueClasses.some(c => c.id === a.class_id)) {
-            uniqueClasses.push({ id: a.class_id, name: a.class_name });
-          }
-        });
+      // Load Academic Structure for Department & Class selection
+      await this.populateStaffDeptDropdown();
 
-        classSelect.innerHTML = '<option value="">-- Choose Class --</option>' + 
-          uniqueClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-        corrClassSelect.innerHTML = '<option value="">-- Select Class --</option>' + 
-          uniqueClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      // Load Today's Logged Periods
+      this.loadStaffPeriodLogs();
 
-        // Store allocations for dropdown matching
-        this.staffAllocations = res.allocations;
-      }
-
-      // Active Session or Create Form
-      if (res.activeSession) {
-        this.displayStaffActiveSession(res.activeSession);
-      } else {
-        document.getElementById('staffActiveSessionBanner').style.display = 'none';
-        document.getElementById('staffCreateSessionCard').style.display = 'block';
-        if (this.activeSessionInterval) clearInterval(this.activeSessionInterval);
-        if (this.activeQrTimer) clearInterval(this.activeQrTimer);
-      }
-
-      // Load Staff History & Corrections
+      // Load Staff Monthly Attendance History
       this.loadStaffHistory();
-      this.loadStaffCorrectionRequests();
 
     } catch (err) {
       this.showToast(err.message, 'error');
     }
   },
 
-  async handleStaffCheckIn() {
+  async populateStaffDeptDropdown() {
     try {
-      const res = await API.staffCheckIn();
-      this.showToast(res.message, 'success');
-      this.loadStaffDashboard();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  async handleStaffCheckOut() {
-    try {
-      const res = await API.staffCheckOut();
-      this.showToast(res.message, 'success');
-      this.loadStaffDashboard();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  handleSessionClassChange() {
-    const classId = parseInt(document.getElementById('sessionClassSelect').value, 10);
-    const subSelect = document.getElementById('sessionSubjectSelect');
-
-    if (!classId || !this.staffAllocations) {
-      subSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
-      return;
-    }
-
-    const subs = this.staffAllocations.filter(a => a.class_id === classId);
-    subSelect.innerHTML = '<option value="">-- Choose Subject --</option>' +
-      subs.map(s => `<option value="${s.subject_id}">${s.subject_code} - ${s.subject_name}</option>`).join('');
-  },
-
-  async handleCorrClassChange() {
-    const classId = document.getElementById('corrClassSelect').value;
-    const stuSelect = document.getElementById('corrStudentSelect');
-
-    if (!classId) {
-      stuSelect.innerHTML = '<option value="">-- Select Student --</option>';
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/admin/users?role=student&class_id=${classId}`, {
-        headers: { 'Authorization': `Bearer ${API.getToken()}` }
-      }).then(r => r.json());
-
-      if (res.users) {
-        stuSelect.innerHTML = '<option value="">-- Select Student --</option>' +
-          res.users.map(u => `<option value="${u.id}">${u.register_number || u.username} - ${u.full_name}</option>`).join('');
+      const acad = await API.getAcademicStructure();
+      this.academicData = acad;
+      const deptSelect = document.getElementById('periodDeptSelect');
+      if (acad && acad.departments && deptSelect) {
+        deptSelect.innerHTML = '<option value="">-- Select Department --</option>' +
+          acad.departments.map(d => `<option value="${d.id}">${d.name} (${d.code})</option>`).join('');
       }
+
+      // Auto-populate Class dropdown
+      this.handlePeriodDeptChange();
     } catch (e) {
       console.error(e);
     }
   },
 
-  async handleCreateSession(e) {
-    if (e && e.preventDefault) e.preventDefault();
+  handlePeriodDeptChange() {
+    const deptId = parseInt(document.getElementById('periodDeptSelect')?.value || '0', 10);
+    const classSelect = document.getElementById('periodClassSelect');
+    if (!classSelect) return;
 
-    const classId = parseInt(document.getElementById('sessionClassSelect').value, 10);
-    const subjectId = parseInt(document.getElementById('sessionSubjectSelect').value, 10);
-    const periodNumber = parseInt(document.getElementById('sessionPeriodSelect')?.value || '1', 10);
-    const topic = document.getElementById('sessionTopicInput').value.trim();
-
-    try {
-      const res = await API.createClassSession(classId, subjectId, topic, periodNumber);
-      this.showToast(`Period ${periodNumber} attendance session launched!`, 'success');
-      this.loadStaffDashboard();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  staffActivePeriodMarks: {},
-  currentActiveRoster: [],
-  currentLessonPhotoBase64: null,
-
-  displayStaffActiveSession(session) {
-    this.activeSessionId = session.id;
-    this.staffActivePeriodMarks = {};
-    document.getElementById('staffActiveSessionBanner').style.display = 'block';
-    document.getElementById('staffCreateSessionCard').style.display = 'none';
-
-    document.getElementById('staffActiveSubTitle').textContent = `${session.subject_code} - ${session.subject_name} (${session.class_name})`;
-    const periodBadge = document.getElementById('staffActivePeriodBadge');
-    if (periodBadge) periodBadge.textContent = `Period ${session.period_number || 1}`;
-
-    // Start dynamic rotating QR token refresh loop
-    this.refreshSessionQR();
-    if (this.activeQrTimer) clearInterval(this.activeQrTimer);
-
-    // Refresh QR token every 30 seconds
-    this.activeQrTimer = setInterval(() => {
-      this.refreshSessionQR();
-    }, 30000);
-
-    // Refresh live roster monitor every 5 seconds
-    this.refreshActiveSessionMonitor();
-    if (this.activeSessionInterval) clearInterval(this.activeSessionInterval);
-    this.activeSessionInterval = setInterval(() => {
-      this.refreshActiveSessionMonitor();
-    }, 5000);
-  },
-
-  async refreshSessionQR() {
-    if (!this.activeSessionId) return;
-    try {
-      const res = await API.getSessionQR(this.activeSessionId);
-      if (res.qrToken) {
-        this.currentActiveQrToken = res.qrToken;
-        const qrSvg = generateQRCodeSvg(res.qrToken, 6, 2, '#991B1B', '#FFFFFF');
-        document.getElementById('staffLiveQrBox').innerHTML = qrSvg;
-
-        // Reset and animate progress bar
-        const progressBar = document.getElementById('staffQrProgress');
-        const timerText = document.getElementById('staffQrTimerText');
-        if (progressBar) {
-          progressBar.style.transition = 'none';
-          progressBar.style.width = '100%';
-          setTimeout(() => {
-            progressBar.style.transition = `width ${res.durationSeconds}s linear`;
-            progressBar.style.width = '0%';
-          }, 50);
-        }
-
-        if (timerText) timerText.textContent = `Period Session Active`;
+    if (!deptId || !this.academicData || !this.academicData.classes) {
+      classSelect.innerHTML = '<option value="">-- Select Class --</option>';
+      if (this.academicData && this.academicData.classes) {
+        classSelect.innerHTML += this.academicData.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
       }
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  copyActiveQRToken() {
-    if (this.currentActiveQrToken) {
-      navigator.clipboard.writeText(this.currentActiveQrToken);
-      this.showToast('Active QR token copied to clipboard!', 'info');
-    }
-  },
-
-  async refreshActiveSessionMonitor() {
-    if (!this.activeSessionId) return;
-    try {
-      const res = await API.getSessionMonitor(this.activeSessionId);
-      if (res.stats) {
-        document.getElementById('staffLiveTotal').textContent = res.stats.total;
-        document.getElementById('staffLivePresent').textContent = res.stats.present + res.stats.late;
-        document.getElementById('staffLiveAbsent').textContent = res.stats.absent;
-      }
-
-      if (res.roster && res.roster.length > 0) {
-        this.currentActiveRoster = res.roster;
-        
-        // Sync roster status to local period marks map if not set
-        res.roster.forEach(r => {
-          if (!this.staffActivePeriodMarks[r.student_id]) {
-            this.staffActivePeriodMarks[r.student_id] = r.status || 'present';
-          }
-        });
-
-        this.renderPeriodRosterTable();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  renderPeriodRosterTable() {
-    const tbody = document.getElementById('staffLiveRosterTable');
-    if (!tbody || !this.currentActiveRoster) return;
-
-    tbody.innerHTML = this.currentActiveRoster.map(r => {
-      const currentSt = this.staffActivePeriodMarks[r.student_id] || r.status || 'present';
-      return `
-        <tr>
-          <td><strong>${r.register_number}</strong></td>
-          <td>${r.full_name}</td>
-          <td>
-            <span class="status-badge status-${currentSt}">
-              ${currentSt.toUpperCase()}
-            </span>
-          </td>
-          <td>
-            <div class="period-btn-group">
-              <button type="button" class="period-att-btn ${currentSt === 'present' ? 'active-present' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'present')">P</button>
-              <button type="button" class="period-att-btn ${currentSt === 'absent' ? 'active-absent' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'absent')">A</button>
-              <button type="button" class="period-att-btn ${currentSt === 'late' ? 'active-late' : ''}" onclick="App.setStudentPeriodStatus(${r.student_id}, 'late')">L</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-  },
-
-  setStudentPeriodStatus(studentId, status) {
-    this.staffActivePeriodMarks[studentId] = status;
-    this.renderPeriodRosterTable();
-  },
-
-  markAllClassStudents(status) {
-    if (!this.currentActiveRoster) return;
-    this.currentActiveRoster.forEach(r => {
-      this.staffActivePeriodMarks[r.student_id] = status;
-    });
-    this.renderPeriodRosterTable();
-    this.showToast(`Marked all students as ${status.toUpperCase()} (Click Save to store)`, 'info');
-  },
-
-  async submitBatchPeriodAttendance() {
-    if (!this.activeSessionId) return;
-    const marks = Object.entries(this.staffActivePeriodMarks).map(([studentId, status]) => ({
-      studentId: parseInt(studentId, 10),
-      status
-    }));
-
-    if (marks.length === 0) {
-      this.showToast('No students loaded in roster', 'error');
       return;
     }
 
-    try {
-      const res = await API.batchMarkPeriodAttendance(this.activeSessionId, marks);
-      this.showToast(res.message, 'success');
-      this.refreshActiveSessionMonitor();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
+    const filtered = this.academicData.classes.filter(c => c.department_id === deptId);
+    classSelect.innerHTML = '<option value="">-- Select Class --</option>' +
+      (filtered.length > 0 ? filtered : this.academicData.classes)
+        .map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   },
 
-  async quickManualMark(studentId, newStatus) {
-    if (!this.activeSessionId) return;
-    try {
-      await API.manualMarkStudent(this.activeSessionId, studentId, newStatus);
-      this.staffActivePeriodMarks[studentId] = newStatus;
-      this.showToast(`Student attendance updated to ${newStatus.toUpperCase()}`, 'success');
-      this.refreshActiveSessionMonitor();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  // LESSON END & BLACKBOARD PHOTO PROOF MODAL CONTROLS
-  openFinalizeSessionModal() {
-    document.getElementById('finalizeSessionModal').style.display = 'flex';
-    const topicInput = document.getElementById('finalLessonTopic');
-    if (topicInput) topicInput.value = document.getElementById('sessionTopicInput')?.value || '';
-    this.currentLessonPhotoBase64 = null;
-    const preview = document.getElementById('finalLessonPhotoPreview');
-    if (preview) { preview.src = ''; preview.style.display = 'none'; }
-  },
-
-  closeFinalizeSessionModal() {
-    document.getElementById('finalizeSessionModal').style.display = 'none';
-  },
-
-  handleLessonPhotoSelect(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      this.currentLessonPhotoBase64 = evt.target.result;
-      const preview = document.getElementById('finalLessonPhotoPreview');
-      if (preview) {
-        preview.src = this.currentLessonPhotoBase64;
-        preview.style.display = 'block';
-      }
-    };
-    reader.readAsDataURL(file);
-  },
-
-  snapLessonPhotoFromCamera() {
-    const input = document.getElementById('finalLessonPhotoInput');
+  snapPeriodPhotoCamera() {
+    const input = document.getElementById('periodPhotoInput');
     if (input) {
       input.setAttribute('capture', 'environment');
       input.click();
     }
   },
 
-  async handleFinalizeSessionSubmit(e) {
+  handlePeriodPhotoSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      this.staffDutyPhotoBase64 = evt.target.result;
+      const previewBox = document.getElementById('periodPhotoPreviewBox');
+      const previewImg = document.getElementById('periodPhotoPreview');
+      if (previewBox && previewImg) {
+        previewImg.src = this.staffDutyPhotoBase64;
+        previewBox.style.display = 'block';
+      }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  async handlePeriodLogSubmit(e) {
     if (e && e.preventDefault) e.preventDefault();
 
-    const topic = document.getElementById('finalLessonTopic').value.trim();
-    const summary = document.getElementById('finalLessonSummary').value.trim();
-    const photo = this.currentLessonPhotoBase64 || null;
+    const deptId = document.getElementById('periodDeptSelect')?.value;
+    const classId = document.getElementById('periodClassSelect')?.value;
+    const periodNumber = document.getElementById('periodNumberSelect')?.value;
+    const subjectName = document.getElementById('periodSubjectInput')?.value.trim();
+    const periodTime = document.getElementById('periodTimeInput')?.value.trim();
+    const lessonTopic = document.getElementById('periodLessonTopic')?.value.trim();
+    const lessonSummary = document.getElementById('periodLessonSummary')?.value.trim();
+    const photo = this.staffDutyPhotoBase64 || null;
 
-    if (!topic) {
-      this.showToast('Please enter the lesson topic covered in class', 'error');
+    if (!periodNumber) {
+      this.showToast('Please select the period hour', 'error');
+      return;
+    }
+    if (!subjectName) {
+      this.showToast('Please enter the subject taught', 'error');
+      return;
+    }
+    if (!lessonTopic && !lessonSummary) {
+      this.showToast('Please enter lesson notes on what was done in this period', 'error');
       return;
     }
 
-    try {
-      const res = await API.finalizeSession(this.activeSessionId, topic, summary, photo);
-      this.showToast(res.message, 'success');
-      this.closeFinalizeSessionModal();
-
-      if (this.activeSessionInterval) clearInterval(this.activeSessionInterval);
-      if (this.activeQrTimer) clearInterval(this.activeQrTimer);
-      this.loadStaffDashboard();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  async finalizeActiveSession() {
-    this.openFinalizeSessionModal();
-  },
-
-  async handleStaffCorrectionRequest(e) {
-    if (e && e.preventDefault) e.preventDefault();
-
-    const studentId = parseInt(document.getElementById('corrStudentSelect').value, 10);
-    const requestedStatus = document.getElementById('corrStatusSelect').value;
-    const reason = document.getElementById('corrReason').value.trim();
-
-    if (!studentId || !requestedStatus || !reason) {
-      this.showToast('Please fill all correction request fields', 'error');
-      return;
-    }
-
-    // Attach to active session or last session
-    const sessionId = this.activeSessionId || 1;
+    const submitBtn = document.getElementById('periodSubmitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Saving duty log & photo proof...</span>';
 
     try {
-      const res = await API.submitCorrectionRequest({
-        sessionId,
-        studentId,
-        originalStatus: 'absent',
-        requestedStatus,
-        reason
+      const res = await API.submitPeriodLog({
+        departmentId: deptId ? parseInt(deptId, 10) : null,
+        classId: classId ? parseInt(classId, 10) : null,
+        periodNumber: parseInt(periodNumber, 10),
+        subjectName,
+        startTime: periodTime || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        lessonTopic,
+        lessonSummary,
+        lessonPhoto: photo
       });
-      this.showToast(res.message, 'success');
-      document.getElementById('corrReason').value = '';
-      this.loadStaffCorrectionRequests();
+
+      this.showToast(res.message || `Period ${periodNumber} duty log recorded successfully!`, 'success');
+
+      // Reset form
+      document.getElementById('periodLogForm').reset();
+      this.staffDutyPhotoBase64 = null;
+      const previewBox = document.getElementById('periodPhotoPreviewBox');
+      if (previewBox) previewBox.style.display = 'none';
+
+      // Refresh logged periods table
+      this.loadStaffPeriodLogs();
     } catch (err) {
       this.showToast(err.message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>🚀 Save & Submit Class Period Duty Log</span>';
     }
   },
 
-  async loadStaffCorrectionRequests() {
+  async loadStaffPeriodLogs() {
     try {
-      const res = await API.getStaffCorrectionRequests();
-      const tbody = document.getElementById('staffCorrectionRequestsBody');
+      const res = await API.getMyPeriodLogs();
+      const tbody = document.getElementById('staffMyLogsTableBody');
+      if (!tbody) return;
 
-      if (!res.list || res.list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:12px; color:#64748B;">No correction requests filed yet.</td></tr>';
+      if (!res.logs || res.logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 16px; color: #64748B;">No period duty logs recorded today yet. Use the form above to log teaching activity.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = res.list.map(r => `
-        <tr>
-          <td>${r.session_date}</td>
-          <td><strong>${r.student_name}</strong> (${r.register_number})</td>
-          <td>${r.subject_code}</td>
-          <td><span style="color:#DC2626;">${r.original_status}</span> ➔ <strong style="color:#059669;">${r.requested_status}</strong></td>
-          <td style="max-width:200px; font-size:12px;">${r.reason}</td>
-          <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-          <td style="font-size:12px; color:#64748B;">${r.review_remarks || '-'}</td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = res.logs.map(log => {
+        const hasPhoto = !!log.lesson_photo;
+        const photoHtml = hasPhoto
+          ? `<img src="${log.lesson_photo}" class="duty-photo-thumb" alt="Blackboard Photo" onclick="App.openPhotoModal('${log.lesson_photo}', 'Period ${log.period_number} Proof: ${log.subject_name}', 'Department: ${log.department_name || '-'} &bull; Class: ${log.class_name || '-'} &bull; Date: ${log.date}')" title="Click to enlarge photo">`
+          : '<span style="font-size:11px; color:#94A3B8;">No Photo</span>';
+
+        return `
+          <tr>
+            <td>
+              <span class="status-badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:800;">
+                Period ${log.period_number}
+              </span>
+            </td>
+            <td>
+              <strong>${log.department_name || '-'}</strong><br>
+              <small style="color:#64748B;">${log.class_name || '-'}</small>
+            </td>
+            <td>
+              <strong>${log.subject_name || '-'}</strong>
+            </td>
+            <td style="font-size:12px; white-space:nowrap;">
+              ${log.start_time || '-'}
+            </td>
+            <td style="max-width:280px; font-size:12px; line-height:1.4;">
+              ${log.lesson_topic ? `<strong style="color:#B91C1C;">${log.lesson_topic}</strong><br>` : ''}
+              <span>${log.lesson_summary || '-'}</span>
+            </td>
+            <td>${photoHtml}</td>
+            <td>
+              <span class="status-badge status-present">Logged ✓</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
     } catch (e) {
       console.error(e);
     }
@@ -1094,6 +868,8 @@ const App = {
     try {
       const res = await API.getStaffHistory();
       const tbody = document.getElementById('staffHistoryTableBody');
+      if (!tbody) return;
+
       if (!res.records || res.records.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:14px; color:#64748B;">No check-in logs for this month.</td></tr>';
         return;
@@ -1115,9 +891,9 @@ const App = {
 
   switchStaffTab(tab) {
     if (tab === 'checkin') {
-      document.getElementById('staffCheckInStatusDisplay').scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'corrections') {
-      document.getElementById('correctionRequestForm').scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('staffCheckInStatusDisplay')?.scrollIntoView({ behavior: 'smooth' });
+    } else if (tab === 'history') {
+      document.getElementById('staffHistoryTableBody')?.scrollIntoView({ behavior: 'smooth' });
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -1126,81 +902,67 @@ const App = {
   // -------------------------------------------------------------
   // ADMIN CONTROLLERS
   // -------------------------------------------------------------
+  allAdminUsers: null,
+
   async loadAdminDashboard() {
     try {
-      const res = await API.getAdminDashboard();
+      const [res, dutyLogsRes] = await Promise.all([
+        API.getAdminDashboard(),
+        API.getAdminPeriodLogs().catch(() => ({ logs: [] }))
+      ]);
 
       // Metrics
-      document.getElementById('adminMetricStudents').textContent = res.counts.students;
-      document.getElementById('adminMetricStaff').textContent = res.counts.staff;
-      document.getElementById('adminMetricTodayRate').textContent = `${res.todayAttendance.rate}%`;
-      document.getElementById('adminMetricPendingCorr').textContent = res.counts.pendingCorrections;
+      const staffCount = res.counts?.staff || 0;
+      const checkedInCount = (res.staffCheckIns || []).filter(s => s.check_in_time).length;
+      const dutyLogsToday = (dutyLogsRes.logs || []).filter(l => l.date === new Date().toISOString().split('T')[0]).length;
 
-      // Low Attendance Table
-      const lowBody = document.getElementById('adminLowAttendanceTableBody');
-      if (res.lowAttendanceStudents && res.lowAttendanceStudents.length > 0) {
-        lowBody.innerHTML = res.lowAttendanceStudents.map(s => `
-          <tr>
-            <td><strong>${s.register_number}</strong></td>
-            <td>${s.full_name}</td>
-            <td>${s.class_name}</td>
-            <td>${s.attended_sessions} / ${s.total_sessions} classes</td>
-            <td><span class="status-badge status-absent" style="font-weight:900;">${s.percentage}% ⚠️</span></td>
-            <td><a href="mailto:${s.email}" style="font-size:12px;">${s.email}</a></td>
-          </tr>
-        `).join('');
-      } else {
-        lowBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:12px; color:#059669;">All students have attendance >= 75%!</td></tr>';
-      }
+      document.getElementById('adminMetricStaff').textContent = staffCount;
+      document.getElementById('adminMetricTodayRate').textContent = `${checkedInCount} / ${staffCount}`;
+      document.getElementById('adminMetricDutyLogs').textContent = dutyLogsToday;
+      document.getElementById('adminMetricDepts').textContent = '5';
 
-      // Today's Absentees
-      const absBody = document.getElementById('adminTodayAbsenteesBody');
-      if (res.todayAbsentees && res.todayAbsentees.length > 0) {
-        absBody.innerHTML = res.todayAbsentees.map(a => `
-          <tr>
-            <td><strong>${a.register_number}</strong></td>
-            <td>${a.full_name}</td>
-            <td>${a.class_name}</td>
-            <td>${a.subject_name}</td>
-          </tr>
-        `).join('');
-      } else {
-        absBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:12px; color:#64748B;">No absentees logged today.</td></tr>';
-      }
-
-      // Today's Late Arrivals
-      const lateBody = document.getElementById('adminTodayLateBody');
-      if (res.todayLateArrivals && res.todayLateArrivals.length > 0) {
-        lateBody.innerHTML = res.todayLateArrivals.map(l => `
-          <tr>
-            <td><strong>${l.register_number}</strong></td>
-            <td>${l.full_name}</td>
-            <td>${l.class_name}</td>
-            <td>${l.marked_at}</td>
-          </tr>
-        `).join('');
-      } else {
-        lateBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:12px; color:#64748B;">No late arrivals logged today.</td></tr>';
-      }
-
-      // Staff Check-ins
+      // Staff Check-ins table
       const staffBody = document.getElementById('adminStaffCheckInBody');
       if (res.staffCheckIns && res.staffCheckIns.length > 0) {
         staffBody.innerHTML = res.staffCheckIns.map(s => `
           <tr>
             <td><strong>${s.full_name}</strong></td>
-            <td>${s.designation}</td>
-            <td>${s.department_name}</td>
-            <td>${s.check_in_time || '<span style="color:#DC2626;">Not in</span>'}</td>
+            <td>${s.designation || 'Faculty'}</td>
+            <td>${s.department_name || '-'}</td>
+            <td>${s.check_in_time ? `<span style="color:#059669; font-weight:700;">${s.check_in_time}</span>` : '<span style="color:#DC2626;">Not in</span>'}</td>
             <td>${s.check_out_time || '-'}</td>
             <td>${s.working_hours ? s.working_hours + ' hrs' : '-'}</td>
-            <td><span class="status-badge status-${s.status || 'absent'}">${s.status || 'absent'}</span></td>
+            <td><span class="status-badge status-${s.status || 'absent'}">${(s.status || 'absent').toUpperCase()}</span></td>
           </tr>
         `).join('');
+      } else {
+        staffBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:14px; color:#64748B;">No faculty check-ins logged today yet.</td></tr>';
       }
 
-      // Populate filter dropdowns
-      this.populateAdminFilters();
+      // Recent Duty Logs table for Overview
+      const overviewLogsBody = document.getElementById('adminOverviewDutyLogsBody');
+      if (overviewLogsBody) {
+        const recentLogs = (dutyLogsRes.logs || []).slice(0, 10);
+        if (recentLogs.length > 0) {
+          overviewLogsBody.innerHTML = recentLogs.map(l => {
+            const photoThumb = l.lesson_photo
+              ? `<img src="${l.lesson_photo}" class="duty-photo-thumb" alt="Photo" onclick="App.openPhotoModal('${l.lesson_photo}', 'Period ${l.period_number}: ${l.staff_name}', 'Subject: ${l.subject_name} &bull; Dept: ${l.department_name}')">`
+              : '<span style="font-size:11px; color:#94A3B8;">No Photo</span>';
+            return `
+              <tr>
+                <td><span class="status-badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">Period ${l.period_number}</span></td>
+                <td><strong>${l.staff_name}</strong><br><small style="color:#64748B;">${l.staff_designation || ''}</small></td>
+                <td>${l.department_name || '-'}<br><small style="color:#64748B;">${l.class_name || '-'}</small></td>
+                <td><strong>${l.subject_name}</strong></td>
+                <td style="max-width:260px; font-size:12px;">${l.lesson_summary || l.lesson_topic || '-'}</td>
+                <td>${photoThumb}</td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          overviewLogsBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:14px; color:#64748B;">No period teaching logs recorded today.</td></tr>';
+        }
+      }
 
     } catch (err) {
       this.showToast(err.message, 'error');
@@ -1208,7 +970,7 @@ const App = {
   },
 
   switchAdminTab(tabName) {
-    const tabs = ['overview', 'users', 'records', 'corrections', 'academics', 'settings', 'audit'];
+    const tabs = ['overview', 'users', 'periodlogs', 'academics', 'settings', 'audit'];
     tabs.forEach(t => {
       const el = document.getElementById(`adminTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
       if (el) el.style.display = t === tabName ? 'block' : 'none';
@@ -1220,33 +982,74 @@ const App = {
 
     // Load sub-data
     if (tabName === 'users') this.loadAdminUsers();
-    if (tabName === 'records') this.filterAdminAttendanceRecords();
-    if (tabName === 'corrections') this.loadAdminCorrections();
+    if (tabName === 'periodlogs') this.loadAdminPeriodLogs();
     if (tabName === 'academics') this.loadAdminAcademics();
     if (tabName === 'settings') this.loadAdminSettings();
     if (tabName === 'audit') this.loadAdminAuditLogs();
   },
 
-  async populateAdminFilters() {
+  async loadAdminPeriodLogs() {
     try {
-      const res = await API.getAcademicStructure();
-      if (res.classes) {
-        const classFilter = document.getElementById('adminFilterClass');
-        const userClass = document.getElementById('newUserClass');
-        const options = res.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-        if (classFilter) classFilter.innerHTML = '<option value="">All Classes</option>' + options;
-        if (userClass) userClass.innerHTML = '<option value="">-- Select Class --</option>' + options;
+      const date = document.getElementById('adminFilterDutyDate')?.value || '';
+      const deptId = document.getElementById('adminFilterDutyDept')?.value || '';
+      const period = document.getElementById('adminFilterDutyPeriod')?.value || '';
+
+      const res = await API.getAdminPeriodLogs({ date, department_id: deptId, period });
+      const tbody = document.getElementById('adminPeriodLogsTableBody');
+      if (!tbody) return;
+
+      // Populate Department Filter if empty
+      const deptFilter = document.getElementById('adminFilterDutyDept');
+      if (deptFilter && deptFilter.options.length <= 1) {
+        const acad = await API.getAcademicStructure().catch(() => ({}));
+        if (acad && acad.departments) {
+          deptFilter.innerHTML = '<option value="">All Departments</option>' +
+            acad.departments.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        }
       }
-    } catch (e) {
-      console.error(e);
+
+      if (!res.logs || res.logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:18px; color:#64748B;">No faculty class period duty logs matching filters.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = res.logs.map(log => {
+        const photoHtml = log.lesson_photo
+          ? `<img src="${log.lesson_photo}" class="duty-photo-thumb" alt="Blackboard Photo" onclick="App.openPhotoModal('${log.lesson_photo}', 'Period ${log.period_number} Proof: ${log.staff_name}', 'Subject: ${log.subject_name} &bull; Dept: ${log.department_name || '-'} &bull; Class: ${log.class_name || '-'} &bull; Date: ${log.date}')" title="Click to view full photo">`
+          : '<span style="font-size:11px; color:#94A3B8;">No Photo Attached</span>';
+
+        return `
+          <tr>
+            <td>
+              <strong>${log.date}</strong><br>
+              <span class="status-badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:800;">Period ${log.period_number}</span>
+            </td>
+            <td>
+              <strong>${log.staff_name}</strong><br>
+              <small style="color:#64748B;">${log.staff_designation || 'Faculty'}</small>
+            </td>
+            <td><strong>${log.department_name || '-'}</strong></td>
+            <td>${log.class_name || '-'}</td>
+            <td><strong>${log.subject_name || '-'}</strong></td>
+            <td style="max-width:300px; font-size:12px; line-height:1.4;">
+              ${log.lesson_topic ? `<strong style="color:#B91C1C;">${log.lesson_topic}</strong><br>` : ''}
+              <span>${log.lesson_summary || '-'}</span>
+            </td>
+            <td>${photoHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      this.showToast(err.message, 'error');
     }
   },
 
   async loadAdminUsers() {
     try {
       const res = await API.getAdminUsers();
-      this.allAdminUsers = res.users;
-      this.renderAdminUsersTable(res.users);
+      // Filter out students since student portal is disabled
+      this.allAdminUsers = (res.users || []).filter(u => u.role === 'staff' || u.role === 'admin');
+      this.renderAdminUsersTable(this.allAdminUsers);
     } catch (err) {
       this.showToast(err.message, 'error');
     }
@@ -1254,17 +1057,14 @@ const App = {
 
   filterAdminUsers() {
     if (!this.allAdminUsers) return;
-    const query = document.getElementById('adminUserSearchInput').value.toLowerCase();
-    const role = document.getElementById('adminUserRoleFilter').value;
+    const query = document.getElementById('adminUserSearchInput')?.value.toLowerCase() || '';
 
     const filtered = this.allAdminUsers.filter(u => {
-      const matchRole = !role || u.role === role;
-      const matchSearch = !query || 
+      return !query || 
         (u.full_name && u.full_name.toLowerCase().includes(query)) ||
         (u.username && u.username.toLowerCase().includes(query)) ||
-        (u.register_number && u.register_number.toLowerCase().includes(query)) ||
-        (u.email && u.email.toLowerCase().includes(query));
-      return matchRole && matchSearch;
+        (u.department_name && u.department_name.toLowerCase().includes(query)) ||
+        (u.phone && u.phone.includes(query));
     });
 
     this.renderAdminUsersTable(filtered);
@@ -1291,15 +1091,12 @@ const App = {
   renderAdminUsersTable(users) {
     const tbody = document.getElementById('adminUsersTableBody');
     if (!users || users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:16px; color:#64748B;">No user accounts found. Click "Add User" above to add Staff or Students.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:16px; color:#64748B;">No faculty members registered. Click "Add Faculty Staff" above to register faculty.</td></tr>';
       return;
     }
 
     tbody.innerHTML = users.map(u => {
       const isAdmin = u.role === 'admin' || (u.username && u.username.toUpperCase() === 'KRISHNACOLLEGEADMIN');
-      const isStaff = u.role === 'staff';
-      const roleLabel = isAdmin ? 'SOLE ADMIN' : (isStaff ? (u.designation || 'STAFF') : 'STUDENT');
-      const roleBg = isAdmin ? '#0F172A' : (isStaff ? '#B91C1C' : '#059669');
       const escapedName = (u.full_name || '').replace(/'/g, "\\'");
 
       return `
@@ -1307,12 +1104,11 @@ const App = {
           <td>
             <img src="${u.photo_url || '/icons/college-logo.png'}" class="user-avatar-thumb" alt="${u.full_name}">
           </td>
-          <td><strong>${u.register_number || u.username}</strong></td>
-          <td style="font-weight:600;">${u.full_name}</td>
-          <td><span class="role-tag" style="background:${roleBg};">${roleLabel.toUpperCase()}</span></td>
-          <td>${u.class_name || u.department_name || '-'}</td>
+          <td><strong>${u.username}</strong></td>
+          <td style="font-weight:700;">${u.full_name}</td>
+          <td><span class="role-tag" style="background:${isAdmin ? '#0F172A' : '#B91C1C'};">${isAdmin ? 'SOLE ADMIN' : (u.designation || 'FACULTY')}</span></td>
+          <td>${u.department_name || '-'}</td>
           <td style="font-size:12px; font-weight:600;">${u.phone || '-'}</td>
-          <td style="font-size:12px; color:#B91C1C; font-weight:700;">${u.parent_phone || '-'}</td>
           <td style="font-size:11px; max-width:180px; color:#475569;">${u.address || '-'}</td>
           <td><span class="status-badge ${u.is_active ? 'status-present' : 'status-absent'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
           <td>
@@ -1323,8 +1119,8 @@ const App = {
                 <button class="btn btn-outline btn-sm" style="padding:3px 8px; font-size:11px;" onclick="App.toggleUserStatus(${u.id}, ${u.is_active ? 0 : 1})">
                   ${u.is_active ? 'Deactivate' : 'Activate'}
                 </button>
-                <button class="btn btn-danger btn-sm" style="padding:3px 8px; font-size:11px; font-weight:700;" onclick="App.handleDeleteUser(${u.id}, '${escapedName}', '${u.role}')" title="Delete user">
-                  🗑️ Remove
+                <button class="btn btn-danger btn-sm" style="padding:3px 8px; font-size:11px; font-weight:700;" onclick="App.handleDeleteUser(${u.id}, '${escapedName}')" title="Delete staff profile">
+                  🗑️ Remove Staff
                 </button>
               </div>
             `}
@@ -1334,14 +1130,13 @@ const App = {
     }).join('');
   },
 
-  async handleDeleteUser(userId, fullName, role) {
-    const label = role === 'staff' ? 'Faculty Staff / HOD' : 'Student';
-    if (!confirm(`Are you sure you want to permanently delete ${label} "${fullName}"?\n\nThis will remove their profile and all related attendance records.`)) {
+  async handleDeleteUser(userId, fullName) {
+    if (!confirm(`Are you sure you want to permanently delete Faculty Staff member "${fullName}"?\n\nThis will remove their profile and duty records.`)) {
       return;
     }
     try {
       const res = await API.deleteAdminUser(userId);
-      this.showToast(res.message || 'User deleted successfully', 'success');
+      this.showToast(res.message || 'Staff profile deleted successfully', 'success');
       this.loadAdminUsers();
       this.loadAdminDashboard();
     } catch (err) {
@@ -1352,7 +1147,7 @@ const App = {
   async toggleUserStatus(userId, newStatus) {
     try {
       await API.updateAdminUser(userId, { isActive: newStatus });
-      this.showToast(`User status updated to ${newStatus ? 'Active' : 'Deactivated'}`, 'success');
+      this.showToast(`Staff status updated to ${newStatus ? 'Active' : 'Deactivated'}`, 'success');
       this.loadAdminUsers();
     } catch (err) {
       this.showToast(err.message, 'error');
@@ -1363,7 +1158,6 @@ const App = {
     this.newUserPhotoBase64 = null;
     const preview = document.getElementById('newUserPhotoPreview');
     if (preview) preview.style.display = 'none';
-    this.handleNewUserRoleChange();
     document.getElementById('createUserModal').style.display = 'flex';
   },
 
@@ -1371,185 +1165,40 @@ const App = {
     document.getElementById('createUserModal').style.display = 'none';
   },
 
-  handleNewUserRoleChange() {
-    const role = document.getElementById('newRole').value;
-    const isStudent = role === 'student';
-    const classGroup = document.getElementById('newUserClassGroup');
-    if (classGroup) classGroup.style.display = isStudent ? 'block' : 'none';
-    const parentPhoneGroup = document.getElementById('newUserParentPhoneGroup');
-    if (parentPhoneGroup) parentPhoneGroup.style.display = isStudent ? 'block' : 'none';
-    const staffFields = document.getElementById('newUserStaffFields');
-    if (staffFields) staffFields.style.display = isStudent ? 'none' : 'grid';
-  },
-
   async handleCreateUser(e) {
     if (e && e.preventDefault) e.preventDefault();
 
-    const role = document.getElementById('newRole').value;
     const username = document.getElementById('newUsername').value.trim();
     const fullName = document.getElementById('newFullName').value.trim();
     const password = document.getElementById('newPassword').value.trim();
-    const classId = document.getElementById('newUserClass')?.value;
     const deptId = document.getElementById('newUserDept')?.value;
-    const designation = role === 'staff' ? (document.getElementById('newDesignation')?.value || 'Assistant Professor') : 'Student';
+    const designation = document.getElementById('newDesignation')?.value || 'Assistant Professor';
     const email = document.getElementById('newEmail')?.value.trim();
     const phone = document.getElementById('newPhone')?.value.trim();
-    const parentPhone = document.getElementById('newParentPhone')?.value.trim();
     const address = document.getElementById('newAddress')?.value.trim();
     const photoUrl = this.newUserPhotoBase64 || null;
 
     try {
       await API.createAdminUser({
-        role,
+        role: 'staff',
         username,
         fullName,
         password,
-        departmentId: role === 'staff' && deptId ? parseInt(deptId, 10) : null,
-        classId: role === 'student' && classId ? parseInt(classId, 10) : null,
+        departmentId: deptId ? parseInt(deptId, 10) : null,
         designation,
         email,
         phone,
-        parentPhone: role === 'student' ? parentPhone : null,
         address,
-        photoUrl,
-        registerNumber: role === 'student' ? username.toUpperCase() : null
+        photoUrl
       });
-      this.showToast(`${role === 'staff' ? 'Staff' : 'Student'} account registered successfully!`, 'success');
+
+      this.showToast(`Faculty staff member '${fullName}' registered successfully!`, 'success');
       this.newUserPhotoBase64 = null;
       document.getElementById('createUserForm').reset();
       const preview = document.getElementById('newUserPhotoPreview');
       if (preview) preview.style.display = 'none';
       this.closeCreateUserModal();
       this.loadAdminUsers();
-      this.loadAdminDashboard();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  openCsvImportModal() {
-    document.getElementById('csvImportModal').style.display = 'flex';
-  },
-
-  closeCsvImportModal() {
-    document.getElementById('csvImportModal').style.display = 'none';
-  },
-
-  handleCsvFileSelect(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      document.getElementById('csvTextInput').value = event.target.result;
-    };
-    reader.readAsText(file);
-  },
-
-  async submitCsvImport() {
-    const text = document.getElementById('csvTextInput').value.trim();
-    if (!text) {
-      this.showToast('Please provide CSV data', 'error');
-      return;
-    }
-
-    try {
-      const res = await API.importUsersCsv(text, 'student');
-      this.showToast(res.message, 'success');
-      this.closeCsvImportModal();
-      this.loadAdminUsers();
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  async filterAdminAttendanceRecords() {
-    const params = {
-      from_date: document.getElementById('adminFilterFromDate')?.value || '',
-      to_date: document.getElementById('adminFilterToDate')?.value || '',
-      class_id: document.getElementById('adminFilterClass')?.value || '',
-      status: document.getElementById('adminFilterStatus')?.value || ''
-    };
-
-    try {
-      const res = await API.getAdminAttendanceRecords(params);
-      const tbody = document.getElementById('adminAttendanceRecordsBody');
-
-      if (!res.records || res.records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:14px; color:#64748B;">No attendance records found matching filters.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = res.records.map(r => `
-        <tr>
-          <td><strong>${r.date}</strong></td>
-          <td><strong>${r.register_number}</strong></td>
-          <td>${r.student_name}</td>
-          <td>${r.class_name}</td>
-          <td>${r.subject_code}</td>
-          <td>${r.staff_name}</td>
-          <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-          <td style="font-size:11px; color:#64748B;">${r.marked_by}</td>
-        </tr>
-      `).join('');
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  exportReport(format = 'csv') {
-    const filters = {
-      from_date: document.getElementById('adminFilterFromDate')?.value || '',
-      to_date: document.getElementById('adminFilterToDate')?.value || '',
-      class_id: document.getElementById('adminFilterClass')?.value || '',
-      status: document.getElementById('adminFilterStatus')?.value || ''
-    };
-    const url = API.getExportReportUrl(format, filters);
-    window.open(url, '_blank');
-  },
-
-  async loadAdminCorrections() {
-    try {
-      const res = await API.getAdminCorrectionRequests();
-      const tbody = document.getElementById('adminCorrectionsTableBody');
-
-      if (!res.requests || res.requests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:14px; color:#64748B;">No correction requests logged.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = res.requests.map(r => `
-        <tr>
-          <td>#${r.id}</td>
-          <td>${r.session_date}</td>
-          <td>${r.staff_name}</td>
-          <td><strong>${r.student_name}</strong> (${r.register_number})</td>
-          <td>${r.subject_code}</td>
-          <td><span style="color:#DC2626;">${r.original_status}</span> ➔ <strong style="color:#059669;">${r.requested_status}</strong></td>
-          <td style="font-size:12px; max-width:200px;">${r.reason}</td>
-          <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-          <td>
-            ${r.status === 'pending' ? `
-              <div style="display:flex; gap:4px;">
-                <button class="btn btn-success btn-sm" style="padding:2px 8px; font-size:11px;" onclick="App.reviewCorrection(${r.id}, 'approved')">Approve</button>
-                <button class="btn btn-danger btn-sm" style="padding:2px 8px; font-size:11px;" onclick="App.reviewCorrection(${r.id}, 'rejected')">Reject</button>
-              </div>
-            ` : `<span style="font-size:11px; color:#64748B;">Reviewed</span>`}
-          </td>
-        </tr>
-      `).join('');
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
-  },
-
-  async reviewCorrection(requestId, action) {
-    const remarks = prompt(`Enter optional remarks for ${action.toUpperCase()}ing request #${requestId}:`, 'Verified by Admin');
-    if (remarks === null) return;
-
-    try {
-      const res = await API.reviewCorrectionRequest(requestId, action, remarks);
-      this.showToast(res.message, 'success');
-      this.loadAdminCorrections();
       this.loadAdminDashboard();
     } catch (err) {
       this.showToast(err.message, 'error');
@@ -1563,17 +1212,17 @@ const App = {
       const allocRes = await API.getAdminAllocations();
       const allocBody = document.getElementById('adminAcademicsAllocBody');
 
-      if (res.classes) {
+      if (res.classes && classBody) {
         classBody.innerHTML = res.classes.map(c => `
           <tr>
-            <td><strong>${c.name}</strong></td>
-            <td>${c.department_name}</td>
+            <td><strong>${c.code || c.name}</strong></td>
+            <td>${c.name}</td>
             <td>${c.degree_level} (Sem ${c.semester})</td>
           </tr>
         `).join('');
       }
 
-      if (allocRes.allocations) {
+      if (allocRes.allocations && allocBody) {
         allocBody.innerHTML = allocRes.allocations.map(a => `
           <tr>
             <td><strong>${a.staff_name}</strong></td>
@@ -1593,15 +1242,11 @@ const App = {
       if (res.settings) {
         const sMap = {};
         res.settings.forEach(s => sMap[s.key] = s.value);
-        const qrToggle = document.getElementById('settingStudentQrToggle');
-        if (qrToggle) qrToggle.value = sMap.student_qr_enabled || '0';
-        document.getElementById('settingQrDuration').value = sMap.qr_duration_seconds || '30';
-        document.getElementById('settingLateGrace').value = sMap.late_grace_minutes || '10';
-        document.getElementById('settingLowThreshold').value = sMap.low_attendance_threshold || '75';
-        document.getElementById('settingLocationToggle').value = sMap.location_verification_enabled || '0';
-        document.getElementById('settingCampusLat').value = sMap.campus_latitude || '10.9234';
-        document.getElementById('settingCampusLng').value = sMap.campus_longitude || '78.0772';
-        document.getElementById('settingCampusRadius').value = sMap.campus_radius_meters || '350';
+        if (document.getElementById('settingCampusLat')) {
+          document.getElementById('settingCampusLat').value = sMap.campus_latitude || '10.9234';
+          document.getElementById('settingCampusLng').value = sMap.campus_longitude || '78.0772';
+          document.getElementById('settingCampusRadius').value = sMap.campus_radius_meters || '350';
+        }
       }
     } catch (err) {
       this.showToast(err.message, 'error');
@@ -1612,19 +1257,14 @@ const App = {
     if (e && e.preventDefault) e.preventDefault();
 
     const data = {
-      student_qr_enabled: document.getElementById('settingStudentQrToggle')?.value || '0',
-      qr_duration_seconds: document.getElementById('settingQrDuration').value,
-      late_grace_minutes: document.getElementById('settingLateGrace').value,
-      low_attendance_threshold: document.getElementById('settingLowThreshold').value,
-      location_verification_enabled: document.getElementById('settingLocationToggle').value,
-      campus_latitude: document.getElementById('settingCampusLat').value,
-      campus_longitude: document.getElementById('settingCampusLng').value,
-      campus_radius_meters: document.getElementById('settingCampusRadius').value
+      campus_latitude: document.getElementById('settingCampusLat')?.value || '10.9234',
+      campus_longitude: document.getElementById('settingCampusLng')?.value || '78.0772',
+      campus_radius_meters: document.getElementById('settingCampusRadius')?.value || '350'
     };
 
     try {
       const res = await API.updateAdminSettings(data);
-      this.showToast('System policies & Student QR switch updated successfully!', 'success');
+      this.showToast('KCAS Campus boundary geofence updated successfully!', 'success');
     } catch (err) {
       this.showToast(err.message, 'error');
     }
@@ -1634,6 +1274,7 @@ const App = {
     try {
       const res = await API.getAuditLogs();
       const tbody = document.getElementById('adminAuditLogsTableBody');
+      if (!tbody) return;
 
       if (!res.logs || res.logs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:12px;">No audit records.</td></tr>';
@@ -1653,6 +1294,24 @@ const App = {
     } catch (err) {
       this.showToast(err.message, 'error');
     }
+  },
+
+  // Photo Lightbox Modal
+  openPhotoModal(photoUrl, title, meta) {
+    const modal = document.getElementById('photoPreviewModal');
+    const img = document.getElementById('photoModalImg');
+    const titleEl = document.getElementById('photoModalTitle');
+    const metaEl = document.getElementById('photoModalMeta');
+
+    if (img) img.src = photoUrl;
+    if (titleEl) titleEl.textContent = title || 'Classroom / Blackboard Photo Proof';
+    if (metaEl) metaEl.innerHTML = meta || '';
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closePhotoModal() {
+    const modal = document.getElementById('photoPreviewModal');
+    if (modal) modal.style.display = 'none';
   }
 };
 

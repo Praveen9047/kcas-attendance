@@ -155,6 +155,17 @@ const API = {
     return this.request(`/api/staff/attendance-history${month ? '?month=' + month : ''}`);
   },
 
+  async submitPeriodLog(data) {
+    return this.request('/api/staff/period-log', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async getMyPeriodLogs(date) {
+    return this.request(`/api/staff/my-period-logs${date ? '?date=' + date : ''}`);
+  },
+
   async createClassSession(classId, subjectId, topic, periodNumber = 1) {
     return this.request('/api/staff/sessions/create', {
       method: 'POST',
@@ -277,6 +288,11 @@ const API = {
 
   async getAdminSettings() {
     return this.request('/api/admin/settings');
+  },
+
+  async getAdminPeriodLogs(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/api/admin/period-logs${query ? '?' + query : ''}`);
   },
 
   async updateAdminSettings(settings) {

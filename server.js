@@ -252,6 +252,10 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 403, 'Your account has been deactivated. Please contact KCAS Administration.');
         }
 
+        if (user.role === 'student') {
+          return sendError(res, 403, 'Student portal is currently disabled. Access is reserved for Faculty Staff, HOD, and Administration.');
+        }
+
         const isValid = verifyPassword(password, user.password_hash, user.salt);
         if (!isValid) {
           recordFailedLogin(clientIp);
@@ -324,223 +328,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       // -----------------------------------------------------------
-      // STUDENT ROUTES
+      // STUDENT ROUTES (DISABLED)
       // -----------------------------------------------------------
       if (pathname.startsWith('/api/student/')) {
-        const auth = getAuthUser(req);
-        if (!auth || auth.role !== 'student') {
-          return sendError(res, 403, 'Forbidden: Student role required');
-        }
-
-        // Student Daily Morning / Evening Attendance Status
-        if (pathname === '/api/student/daily-status' && req.method === 'GET') {
-          const today = new Date().toISOString().split('T')[0];
-          const record = db.prepare('SELECT * FROM student_daily_attendance WHERE student_id = ? AND date = ?').get(auth.id, today);
-          const settings = getSettings();
-          return sendJson(res, 200, {
-            success: true,
-            date: today,
-            record: record || null,
-            settings: {
-              campusLat: parseFloat(settings.campus_latitude || '10.9234'),
-              campusLng: parseFloat(settings.campus_longitude || '78.0772'),
-              campusRadius: parseInt(settings.campus_radius_meters || '350', 10),
-              studentQrEnabled: settings.student_qr_enabled === '1',
-              collegeAddress: settings.college_address || 'Palayam Road, Karur, Tamil Nadu 621301'
-            }
-          });
-        }
-
-        // Student Daily Morning Check-in (Self-marking disabled: only Staff/HOD record attendance)
-        if (pathname === '/api/student/daily-checkin' && req.method === 'POST') {
-          return sendError(res, 403, 'Student self-attendance is disabled. Attendance is recorded exclusively by Faculty & HOD.');
-        }
-
-        // Student Daily Evening Check-out (Self-marking disabled: only Staff/HOD record attendance)
-        if (pathname === '/api/student/daily-checkout' && req.method === 'POST') {
-          return sendError(res, 403, 'Student self-attendance is disabled. Attendance is recorded exclusively by Faculty & HOD.');
-        }
-
-        // Student Profile & Academic Details
-        if (pathname === '/api/student/profile' && req.method === 'GET') {
-          const profile = db.prepare(`
-            SELECT u.id, u.username, u.full_name, u.email, u.phone, u.register_number,
-                   d.name as department_name, d.code as department_code,
-                   c.name as class_name, c.semester, c.academic_year, c.section,
-                   co.name as course_name, co.degree_level
-            FROM users u
-            LEFT JOIN departments d ON u.department_id = d.id
-            LEFT JOIN classes c ON u.class_id = c.id
-            LEFT JOIN courses co ON c.course_id = co.id
-            WHERE u.id = ?
-          `).get(auth.id);
-
-          return sendJson(res, 200, { success: true, profile });
-        }
-
-        // Student Weekly Timetable
-        if (pathname === '/api/student/timetable' && req.method === 'GET') {
-          const timetable = db.prepare(`
-            SELECT t.id, t.day_of_week, t.period_number, t.start_time, t.end_time, t.room_number,
-                   s.code as subject_code, s.name as subject_name,
-                   u.full_name as staff_name
-            FROM timetables t
-            JOIN subjects s ON t.subject_id = s.id
-            JOIN users u ON t.staff_id = u.id
-            WHERE t.class_id = ?
-            ORDER BY 
-              CASE t.day_of_week 
-                WHEN 'Monday' THEN 1 
-                WHEN 'Tuesday' THEN 2 
-                WHEN 'Wednesday' THEN 3 
-                WHEN 'Thursday' THEN 4 
-                WHEN 'Friday' THEN 5 
-                WHEN 'Saturday' THEN 6 
-                ELSE 7 
-              END,
-              t.period_number ASC
-          `).all(auth.classId);
-
-          return sendJson(res, 200, { success: true, timetable });
-        }
-
-        // Check if there is an active attendance session for this student's class
-        if (pathname === '/api/student/active-session' && req.method === 'GET') {
-          const session = db.prepare(`
-            SELECT s.id, s.session_uuid, s.date, s.start_time, s.topic,
-                   sub.code as subject_code, sub.name as subject_name,
-                   u.full_name as staff_name,
-                   (SELECT status FROM student_attendance sa WHERE sa.session_id = s.id AND sa.student_id = ?) as my_status,
-                   (SELECT marked_at FROM student_attendance sa WHERE sa.session_id = s.id AND sa.student_id = ?) as my_marked_at
-            FROM attendance_sessions s
-            JOIN subjects sub ON s.subject_id = sub.id
-            JOIN users u ON s.staff_id = u.id
-            WHERE s.class_id = ? AND s.status = 'active'
-            ORDER BY s.id DESC LIMIT 1
-          `).get(auth.id, auth.id, auth.classId);
-
-          return sendJson(res, 200, { success: true, session: session || null });
-        }
-
-        // Student Marks Attendance via QR Code (Disabled: only Staff/HOD mark attendance)
-        if (pathname === '/api/student/mark-attendance' && req.method === 'POST') {
-          return sendError(res, 403, 'Student self-attendance is disabled. Class period attendance is marked directly by Faculty and HOD.');
-        }
-
-        // Student Attendance Stats & Low-Attendance Alerts
-        if (pathname === '/api/student/attendance-stats' && req.method === 'GET') {
-          const settings = getSettings();
-          const threshold = parseInt(settings.low_attendance_threshold || '75', 10);
-
-          // All sessions for this student's class
-          const totalSessions = db.prepare(`
-            SELECT COUNT(*) as count FROM attendance_sessions WHERE class_id = ? AND status != 'cancelled'
-          `).get(auth.classId).count;
-
-          const attendanceRecords = db.prepare(`
-            SELECT sa.status, COUNT(*) as count
-            FROM student_attendance sa
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            WHERE sa.student_id = ? AND s.status != 'cancelled'
-            GROUP BY sa.status
-          `).all(auth.id);
-
-          let presentCount = 0;
-          let lateCount = 0;
-          let absentCount = 0;
-
-          for (const rec of attendanceRecords) {
-            if (rec.status === 'present') presentCount = rec.count;
-            if (rec.status === 'late') lateCount = rec.count;
-            if (rec.status === 'absent') absentCount = rec.count;
-          }
-
-          // Effective attended = present + late
-          const attendedTotal = presentCount + lateCount;
-          // Unmarked completed sessions count as absent
-          const completedSessions = db.prepare(`
-            SELECT COUNT(*) as count FROM attendance_sessions WHERE class_id = ? AND status = 'completed'
-          `).get(auth.classId).count;
-
-          const effectiveTotal = Math.max(totalSessions, 1);
-          const percentage = totalSessions > 0 ? Math.round((attendedTotal / totalSessions) * 100) : 100;
-          const isLowAttendance = percentage < threshold;
-
-          // Subject-wise breakdown
-          const subjectBreakdown = db.prepare(`
-            SELECT s.id as subject_id, s.code as subject_code, s.name as subject_name,
-                   COUNT(DISTINCT ses.id) as total_classes,
-                   COUNT(DISTINCT CASE WHEN sa.status IN ('present', 'late') THEN sa.id END) as attended_classes,
-                   COUNT(DISTINCT CASE WHEN sa.status = 'late' THEN sa.id END) as late_classes,
-                   COUNT(DISTINCT CASE WHEN sa.status = 'absent' THEN sa.id END) as absent_classes
-            FROM subjects s
-            JOIN attendance_sessions ses ON ses.subject_id = s.id AND ses.class_id = ? AND ses.status != 'cancelled'
-            LEFT JOIN student_attendance sa ON sa.session_id = ses.id AND sa.student_id = ?
-            GROUP BY s.id, s.code, s.name
-          `).all(auth.classId, auth.id);
-
-          const subjectsWithPct = subjectBreakdown.map(sub => {
-            const pct = sub.total_classes > 0 ? Math.round((sub.attended_classes / sub.total_classes) * 100) : 100;
-            return {
-              ...sub,
-              percentage: pct,
-              isLow: pct < threshold
-            };
-          });
-
-          return sendJson(res, 200, {
-            success: true,
-            stats: {
-              totalClasses: totalSessions,
-              present: presentCount,
-              late: lateCount,
-              absent: absentCount + Math.max(0, completedSessions - (presentCount + lateCount + absentCount)),
-              attendedTotal,
-              percentage,
-              threshold,
-              isLowAttendance,
-              subjectBreakdown: subjectsWithPct
-            }
-          });
-        }
-
-        // Student Detailed Attendance History
-        if (pathname === '/api/student/attendance-history' && req.method === 'GET') {
-          const subjectId = parsedUrl.searchParams.get('subject_id');
-          const month = parsedUrl.searchParams.get('month'); // YYYY-MM
-          const status = parsedUrl.searchParams.get('status');
-
-          let query = `
-            SELECT sa.id, sa.status, sa.marked_at, sa.marked_by, sa.location_verified,
-                   s.date, s.start_time, s.topic,
-                   sub.code as subject_code, sub.name as subject_name,
-                   u.full_name as staff_name
-            FROM student_attendance sa
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            JOIN subjects sub ON s.subject_id = sub.id
-            JOIN users u ON s.staff_id = u.id
-            WHERE sa.student_id = ?
-          `;
-          const params = [auth.id];
-
-          if (subjectId) {
-            query += ' AND s.subject_id = ?';
-            params.push(subjectId);
-          }
-          if (month) {
-            query += ' AND s.date LIKE ?';
-            params.push(`${month}%`);
-          }
-          if (status) {
-            query += ' AND sa.status = ?';
-            params.push(status);
-          }
-
-          query += ' ORDER BY s.date DESC, s.start_time DESC';
-          const records = db.prepare(query).all(...params);
-
-          return sendJson(res, 200, { success: true, records });
-        }
+        return sendError(res, 403, 'Student portal is currently disabled. Access is reserved for Faculty Staff, HOD, and Administration.');
       }
 
       // -----------------------------------------------------------
@@ -559,44 +350,124 @@ const server = http.createServer(async (req, res) => {
           // Today's Check-in Status
           const todayAttendance = db.prepare('SELECT * FROM staff_attendance WHERE staff_id = ? AND date = ?').get(auth.id, today);
 
-          // Allocated Classes & Subjects
-          const allocations = db.prepare(`
-            SELECT sa.id, sa.class_id, sa.subject_id, sa.academic_year,
-                   c.name as class_name, c.semester, c.section,
-                   sub.code as subject_code, sub.name as subject_name
-            FROM staff_allocations sa
-            JOIN classes c ON sa.class_id = c.id
-            JOIN subjects sub ON sa.subject_id = sub.id
-            WHERE sa.staff_id = ?
-          `).all(auth.id);
+          // Departments, Classes & Subjects available for logging
+          const departments = db.prepare('SELECT id, code, name FROM departments ORDER BY name ASC').all();
+          const classes = db.prepare('SELECT id, name, section, semester FROM classes ORDER BY name ASC').all();
+          const subjects = db.prepare('SELECT id, code, name FROM subjects ORDER BY name ASC').all();
 
-          // Active session currently hosted by this staff member
-          const activeSession = db.prepare(`
-            SELECT s.id, s.session_uuid, s.date, s.start_time, s.topic,
-                   c.name as class_name, c.id as class_id,
-                   sub.code as subject_code, sub.name as subject_name,
-                   (SELECT COUNT(*) FROM student_attendance sa WHERE sa.session_id = s.id) as scanned_count,
-                   (SELECT COUNT(*) FROM users u WHERE u.class_id = s.class_id AND u.role = 'student') as total_students
+          // Today's Period Logs submitted by this staff member
+          const myTodayLogs = db.prepare(`
+            SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+                   d.name as department_name, d.code as department_code,
+                   c.name as class_name,
+                   sub.name as subject_name, sub.code as subject_code
             FROM attendance_sessions s
-            JOIN classes c ON s.class_id = c.id
-            JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.staff_id = ? AND s.status = 'active'
-            ORDER BY s.id DESC LIMIT 1
-          `).get(auth.id);
-
-          // Today's total completed sessions
-          const todayCompletedCount = db.prepare(`
-            SELECT COUNT(*) as count FROM attendance_sessions WHERE staff_id = ? AND date = ? AND status = 'completed'
-          `).get(auth.id, today).count;
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.staff_id = ? AND s.date = ?
+            ORDER BY s.period_number ASC, s.id DESC
+          `).all(auth.id, today);
 
           return sendJson(res, 200, {
             success: true,
             today,
             todayAttendance: todayAttendance || null,
-            allocations,
-            activeSession: activeSession || null,
-            todayCompletedCount
+            departments,
+            classes,
+            subjects,
+            myTodayLogs,
+            todayCompletedCount: myTodayLogs.length
           });
+        }
+
+        // Staff / HOD Logs Class Period Activity & Lesson Photo Proof
+        if (pathname === '/api/staff/period-log' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const { departmentId, classId, subjectId, subjectName, periodNumber, startTime, endTime, lessonTopic, lessonSummary, lessonPhoto } = body;
+
+          if (!periodNumber) {
+            return sendError(res, 400, 'Period / Hour number is required');
+          }
+          if (!lessonSummary && !lessonTopic) {
+            return sendError(res, 400, 'Please enter lesson topic or activity notes of what was done in this period');
+          }
+
+          const sessionUuid = crypto.randomUUID();
+          const qrSecret = crypto.randomBytes(16).toString('hex');
+          const today = new Date().toISOString().split('T')[0];
+          const start = startTime || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+          const end = endTime || '';
+          const period = parseInt(periodNumber, 10);
+
+          let resolvedSubjectId = subjectId ? parseInt(subjectId, 10) : null;
+          if (!resolvedSubjectId && subjectName && subjectName.trim()) {
+            const existingSub = db.prepare('SELECT id FROM subjects WHERE lower(name) = lower(?)').get(subjectName.trim());
+            if (existingSub) {
+              resolvedSubjectId = existingSub.id;
+            } else {
+              const defaultCourse = db.prepare('SELECT id FROM courses LIMIT 1').get();
+              const insSub = db.prepare('INSERT INTO subjects (code, name, course_id, semester, credits) VALUES (?, ?, ?, 1, 3)').run(
+                'SUB' + Math.floor(100 + Math.random() * 900),
+                subjectName.trim(),
+                defaultCourse ? defaultCourse.id : 1
+              );
+              resolvedSubjectId = Number(insSub.lastInsertRowid);
+            }
+          }
+
+          const stmt = db.prepare(`
+            INSERT INTO attendance_sessions (
+              session_uuid, department_id, class_id, subject_id, staff_id, date, start_time, end_time,
+              status, qr_secret, topic, period_number, lesson_topic, lesson_summary, lesson_photo
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?)
+          `);
+
+          const resInsert = stmt.run(
+            sessionUuid,
+            departmentId ? parseInt(departmentId, 10) : null,
+            classId ? parseInt(classId, 10) : null,
+            resolvedSubjectId,
+            auth.id,
+            today,
+            start,
+            end,
+            qrSecret,
+            lessonTopic || 'Class Period Activity',
+            period,
+            lessonTopic || null,
+            lessonSummary || null,
+            lessonPhoto || null
+          );
+
+          logAudit(auth.id, auth.username, 'LOG_PERIOD_DUTY', 'attendance_sessions', resInsert.lastInsertRowid, `Logged Period ${period} teaching activity with photo proof`, clientIp);
+
+          return sendJson(res, 201, {
+            success: true,
+            message: `Period ${period} teaching activity logged successfully with photo proof!`,
+            sessionId: resInsert.lastInsertRowid
+          });
+        }
+
+        // Get My Submitted Period Logs
+        if (pathname === '/api/staff/my-period-logs' && req.method === 'GET') {
+          const date = parsedUrl.searchParams.get('date') || new Date().toISOString().split('T')[0];
+          const logs = db.prepare(`
+            SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+                   d.name as department_name, d.code as department_code,
+                   c.name as class_name,
+                   sub.name as subject_name, sub.code as subject_code
+            FROM attendance_sessions s
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.staff_id = ? AND s.date = ?
+            ORDER BY s.period_number ASC, s.id DESC
+          `).all(auth.id, date);
+
+          return sendJson(res, 200, { success: true, date, logs });
         }
 
         // Staff Daily Self Check-in with Face Photo & Campus GPS Location Verification
@@ -1605,6 +1476,39 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, message: 'Settings saved successfully' });
         }
 
+        // Faculty Class Period Duty Logs & Photo Proofs for Admin Review
+        if (pathname === '/api/admin/period-logs' && req.method === 'GET') {
+          const date = parsedUrl.searchParams.get('date');
+          const deptId = parsedUrl.searchParams.get('department_id');
+          const staffId = parsedUrl.searchParams.get('staff_id');
+          const period = parsedUrl.searchParams.get('period');
+
+          let query = `
+            SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+                   u.id as staff_id, u.full_name as staff_name, u.username as staff_username, u.designation as staff_designation,
+                   d.name as department_name, d.code as department_code,
+                   c.name as class_name,
+                   sub.name as subject_name, sub.code as subject_code
+            FROM attendance_sessions s
+            JOIN users u ON s.staff_id = u.id
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE 1=1
+          `;
+          const params = [];
+          if (date) { query += ' AND s.date = ?'; params.push(date); }
+          if (deptId) { query += ' AND s.department_id = ?'; params.push(deptId); }
+          if (staffId) { query += ' AND s.staff_id = ?'; params.push(staffId); }
+          if (period) { query += ' AND s.period_number = ?'; params.push(period); }
+
+          query += ' ORDER BY s.date DESC, s.period_number ASC, s.id DESC LIMIT 300';
+          const logs = db.prepare(query).all(...params);
+
+          return sendJson(res, 200, { success: true, count: logs.length, logs });
+        }
+
         // Comprehensive Attendance Records Filter & Search
         if (pathname === '/api/admin/attendance-records' && req.method === 'GET') {
           const fromDate = parsedUrl.searchParams.get('from_date');
@@ -1905,7 +1809,7 @@ function serveFile(filePath, res) {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`================================================================`);
   console.log(` Krishna College of Arts and Science (KCAS) Attendance System`);
-  console.log(` Palayam Road, Karur, Tamil Nadu 639007`);
+  console.log(` Palayam Road, Karur, Tamil Nadu 621301`);
   console.log(` Running on: http://localhost:${PORT}`);
   console.log(` Network IP: http://0.0.0.0:${PORT}`);
   console.log(`================================================================`);

@@ -252,6 +252,7 @@ function runMigrations() {
     if (!staffCols.includes('check_out_lng')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_lng REAL;");
 
     const sessCols = db.prepare("PRAGMA table_info(attendance_sessions)").all().map(c => c.name);
+    if (!sessCols.includes('department_id')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN department_id INTEGER;");
     if (!sessCols.includes('period_number')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN period_number INTEGER DEFAULT 1;");
     if (!sessCols.includes('lesson_topic')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_topic TEXT;");
     if (!sessCols.includes('lesson_summary')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_summary TEXT;");

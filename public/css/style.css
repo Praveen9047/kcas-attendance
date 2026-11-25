@@ -1001,3 +1001,46 @@ a:hover {
   margin-top: 8px;
   background: #000;
 }
+
+/* Duty Photo Proof Thumbnail & Lightbox Modal */
+.duty-photo-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid var(--border-red);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #F1F5F9;
+  display: inline-block;
+}
+
+.duty-photo-thumb:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.25);
+}
+
+.duty-log-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.modal-photo-content {
+  max-width: 720px;
+  width: 95%;
+  background: #FFFFFF;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  padding: 18px;
+}
+
+.photo-modal-img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #0F172A;
+  display: block;
+}
