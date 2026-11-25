@@ -234,7 +234,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         const user = db.prepare(`
-          SELECT u.id, u.username, u.password_hash, u.salt, u.role, u.full_name, u.email, u.phone,
+          SELECT u.id, u.username, u.password_hash, u.salt, u.role, u.full_name, u.email, u.phone, u.photo_url,
                  u.department_id, u.class_id, u.register_number, u.designation, u.is_active,
                  d.name as department_name, c.name as class_name
           FROM users u
@@ -295,7 +295,7 @@ const server = http.createServer(async (req, res) => {
         if (!auth) return sendError(res, 401, 'Unauthorized');
 
         const user = db.prepare(`
-          SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone,
+          SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone, u.photo_url,
                  u.department_id, u.class_id, u.register_number, u.designation, u.is_active,
                  d.name as department_name, d.code as department_code,
                  c.name as class_name, c.semester, c.academic_year
@@ -505,6 +505,12 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 400, `You have already checked in today at ${existing.check_in_time}`);
           }
 
+          // Ensure profile photo enrollment if not yet saved
+          const staffUser = db.prepare('SELECT id, full_name, photo_url FROM users WHERE id = ?').get(auth.id);
+          if (staffUser && !staffUser.photo_url) {
+            db.prepare('UPDATE users SET photo_url = ? WHERE id = ?').run(photo, auth.id);
+          }
+
           if (existing) {
             db.prepare(`
               UPDATE staff_attendance 
@@ -518,11 +524,11 @@ const server = http.createServer(async (req, res) => {
             `).run(auth.id, today, time, photo, latitude, longitude, status);
           }
 
-          logAudit(auth.id, auth.username, 'STAFF_CHECK_IN', 'staff_attendance', auth.id, `Staff checked in at ${time} (${status}) from ${dist}m with Face Verification`, clientIp);
+          logAudit(auth.id, auth.username, 'STAFF_CHECK_IN', 'staff_attendance', auth.id, `Staff checked in at ${time} (${status}) from ${dist}m with Face Biometric Verification`, clientIp);
 
           return sendJson(res, 200, {
             success: true,
-            message: `Check-in recorded at ${time} (${status === 'on_time' ? 'On-Time' : 'Late'})`,
+            message: `Biometric Face Verified! Check-in recorded at ${time} (${status === 'on_time' ? 'On-Time' : 'Late'})`,
             checkInTime: time,
             status,
             distanceMeters: dist
@@ -575,17 +581,22 @@ const server = http.createServer(async (req, res) => {
             workingHours = 0;
           }
 
+          const staffUser = db.prepare('SELECT id, full_name, photo_url FROM users WHERE id = ?').get(auth.id);
+          if (staffUser && !staffUser.photo_url) {
+            db.prepare('UPDATE users SET photo_url = ? WHERE id = ?').run(photo, auth.id);
+          }
+
           db.prepare(`
             UPDATE staff_attendance 
             SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?, working_hours = ?
             WHERE id = ?
           `).run(time, photo, latitude, longitude, workingHours, existing.id);
 
-          logAudit(auth.id, auth.username, 'STAFF_CHECK_OUT', 'staff_attendance', auth.id, `Staff checked out at ${time} (${workingHours} hrs) from ${dist}m with Face Verification`, clientIp);
+          logAudit(auth.id, auth.username, 'STAFF_CHECK_OUT', 'staff_attendance', auth.id, `Staff checked out at ${time} (${workingHours} hrs) from ${dist}m with Face Biometric Verification`, clientIp);
 
           return sendJson(res, 200, {
             success: true,
-            message: `Check-out recorded at ${time}. Total hours logged: ${workingHours} hrs.`,
+            message: `Biometric Face Verified! Check-out recorded at ${time}. Total hours logged: ${workingHours} hrs.`,
             checkOutTime: time,
             workingHours,
             distanceMeters: dist

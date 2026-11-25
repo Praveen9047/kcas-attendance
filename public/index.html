@@ -751,30 +751,63 @@
     </div>
   </div>
 
-  <!-- Modal: Biometric Face & Campus GPS Verification (For Student & Staff Check-In / Check-Out) -->
+  <!-- Modal: Biometric Face Authentication & Campus GPS Verification (For Staff & HOD Check-In / Check-Out) -->
   <div id="faceAuthModal" class="modal-overlay" style="display:none;">
     <div class="modal-content" style="max-width:440px; text-align:center;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 id="faceAuthModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📷 Face Authentication & Campus GPS</h3>
+        <h3 id="faceAuthModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📷 Face Biometric Authentication</h3>
         <button class="btn btn-light btn-sm" onclick="App.closeFaceAuthModal()">✕</button>
       </div>
 
-      <p id="faceAuthModalDesc" style="font-size:12px; color:#64748B; margin-bottom:12px;">
-        Position your face inside the green oval guide. Campus location will be verified automatically.
+      <!-- Staff Registered Profile Reference Badge -->
+      <div id="faceAuthProfileReferenceCard" style="background:#FFF1F2; border:1px solid #FECDD3; border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px; text-align:left;">
+        <img id="faceAuthRefPhoto" src="/icons/college-logo.png" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid #B91C1C; background:#fff;" alt="Registered Photo">
+        <div style="flex:1;">
+          <div style="font-size:10px; font-weight:800; color:#B91C1C; text-transform:uppercase;">Enrolled Profile Photo</div>
+          <strong id="faceAuthRefName" style="font-size:13px; color:#0F172A; display:block;">Faculty Name</strong>
+          <span id="faceAuthRefDesig" style="font-size:11px; color:#64748B;">Staff ID / Role</span>
+        </div>
+        <div style="font-size:22px;">🛡️</div>
+      </div>
+
+      <p id="faceAuthModalDesc" style="font-size:12px; color:#64748B; margin-bottom:10px;">
+        Face authentication will verify your live camera selfie against your enrolled profile photo.
       </p>
 
-      <!-- Video Stream / Canvas Box -->
-      <div class="face-camera-container">
+      <!-- Video Stream / Canvas Box with Laser Scanner -->
+      <div class="face-camera-container" id="faceCameraBox">
         <video id="faceCameraVideo" class="face-camera-video" playsinline autoplay muted></video>
         <canvas id="faceCaptureCanvas" style="display:none;"></canvas>
         <div id="faceOvalGuide" class="face-oval-guide"></div>
-        <div id="faceGuideHint" class="face-guide-hint">Center Face in Oval</div>
+        <div id="faceScanLaserLine" class="face-scan-laser"></div>
+        <div id="faceGuideHint" class="face-guide-hint">Center Face in Oval & Look at Camera</div>
       </div>
 
-      <!-- Captured Preview (if taken) -->
+      <!-- Comparing & Biometric Verification Result Display -->
+      <div id="faceAuthProcessingBox" style="display:none; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; justify-content:center; gap:10px; color:#B91C1C; font-weight:700; font-size:13px;">
+          <span class="face-scanning-spinner"></span>
+          <span>Comparing Live Face with Profile Photo...</span>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Face Comparison Preview & Match Badge -->
       <div id="faceCapturedPreviewBox" style="display:none; margin-bottom:12px;">
-        <img id="faceCapturedImage" src="" alt="Captured Selfie" style="width:160px; height:160px; border-radius:50%; object-fit:cover; border:3px solid #10B981; margin:0 auto;">
-        <p style="font-size:12px; color:#059669; font-weight:700; margin-top:6px;">✓ Selfie Captured Successfully</p>
+        <div class="biometric-compare-box">
+          <div style="text-align:center;">
+            <img id="faceAuthSideProfileImg" src="" class="biometric-face-circle" alt="Profile">
+            <span style="font-size:10px; color:#64748B; display:block; font-weight:700; margin-top:4px;">Profile Photo</span>
+          </div>
+          <div style="font-size:20px; color:#10B981; font-weight:900;">➔</div>
+          <div style="text-align:center;">
+            <img id="faceCapturedImage" src="" class="biometric-face-circle" alt="Live Selfie">
+            <span style="font-size:10px; color:#059669; display:block; font-weight:700; margin-top:4px;">Live Selfie</span>
+          </div>
+        </div>
+
+        <div id="faceAuthMatchResult" style="border-radius:10px; padding:10px 14px; text-align:center;">
+          <!-- Injected dynamically: Match or Mismatch -->
+        </div>
       </div>
 
       <!-- Campus GPS Status Indicator -->
@@ -789,13 +822,13 @@
       <!-- Action Buttons -->
       <div style="display:flex; gap:8px;">
         <button id="faceCaptureActionBtn" class="btn btn-primary" style="flex:1;" onclick="App.captureFaceSnapshot()">
-          <span>📸 Snap Selfie</span>
+          <span>📸 Scan & Verify Face</span>
         </button>
         <button id="faceRetakeActionBtn" class="btn btn-light" style="display:none; flex:1;" onclick="App.retakeFaceSnapshot()">
           <span>🔄 Retake</span>
         </button>
         <button id="faceConfirmActionBtn" class="btn btn-success" style="display:none; flex:1;" onclick="App.confirmAndSubmitFaceAuth()">
-          <span>✓ Submit Attendance</span>
+          <span>✓ Confirm & Mark Attendance (OK)</span>
         </button>
       </div>
     </div>

@@ -931,6 +931,61 @@ a:hover {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
 }
 
+/* Biometric Face Matching & Scanning UI */
+@keyframes faceScanAnimation {
+  0% { top: 12%; opacity: 0.8; }
+  50% { top: 82%; opacity: 1; }
+  100% { top: 12%; opacity: 0.8; }
+}
+
+.face-scan-laser {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #10B981, #34D399, transparent);
+  box-shadow: 0 0 14px #10B981, 0 0 6px #34D399;
+  animation: faceScanAnimation 2s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.biometric-compare-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 12px 0;
+  padding: 12px;
+  background: #FFF1F2;
+  border-radius: 12px;
+  border: 1px solid var(--border-red);
+}
+
+.biometric-face-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #10B981;
+  background: #FFFFFF;
+}
+
+.face-scanning-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #CBD5E1;
+  border-top-color: var(--primary-red);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .face-guide-hint {
   position: absolute;
   bottom: 12px;
