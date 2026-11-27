@@ -101,6 +101,25 @@
             <span>Sign In to Dashboard</span>
           </button>
         </form>
+
+        <!-- Quick 1-Click Login for HOD, Staff & Admin -->
+        <div style="margin-top:18px; padding-top:14px; border-top:1px dashed #FECDD3;">
+          <p style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Quick 1-Click Sign In:</p>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('hod_cs', 'KcasHod2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
+              <span>🎓 <strong>HOD Login:</strong> Dr. K. Ramesh (CS)</span>
+              <span style="font-size:11px; color:#B91C1C; font-weight:700;">Tap to Login &rarr;</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('staff_cs', 'KcasStaff2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#E2E8F0; background:#F8FAFC;">
+              <span>👨‍🏫 <strong>Staff Login:</strong> Prof. S. Priya (CS)</span>
+              <span style="font-size:11px; color:#475569; font-weight:700;">Tap to Login &rarr;</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('KRISHNACOLLEGEADMIN', 'KCASCOLLEGE2027')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#E2E8F0; background:#FFFFFF;">
+              <span>👑 <strong>Admin Login:</strong> Principal KCAS</span>
+              <span style="font-size:11px; color:#475569; font-weight:700;">Tap to Login &rarr;</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

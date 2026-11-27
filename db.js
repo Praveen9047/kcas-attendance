@@ -570,12 +570,63 @@ function ensureKCASDepartments() {
   }
 }
 
+// Ensure 1 Official Dummy HOD and 1 Official Dummy Staff for Testing
+function ensureDummyStaffAndHod() {
+  try {
+    const csDept = db.prepare("SELECT id FROM departments WHERE code = 'CS'").get();
+    const deptId = csDept ? csDept.id : null;
+
+    // 1. Single HOD Account
+    const hodAuth = hashPassword('KcasHod2026');
+    const existingHod = db.prepare("SELECT id FROM users WHERE username = 'hod_cs'").get();
+    if (existingHod) {
+      db.prepare(`
+        UPDATE users 
+        SET password_hash = ?, salt = ?, role = 'staff', is_active = 1,
+            full_name = 'Dr. K. Ramesh (HOD - Computer Science)',
+            email = 'hod.cs@kcas.edu.in', phone = '9842411002',
+            department_id = ?, designation = 'Associate Professor & HOD'
+        WHERE id = ?
+      `).run(hodAuth.hash, hodAuth.salt, deptId, existingHod.id);
+    } else {
+      db.prepare(`
+        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
+        VALUES ('hod_cs', ?, ?, 'staff', 'Dr. K. Ramesh (HOD - Computer Science)', 'hod.cs@kcas.edu.in', '9842411002', ?, 'Associate Professor & HOD', 1)
+      `).run(hodAuth.hash, hodAuth.salt, deptId);
+    }
+
+    // 2. Single Staff Account
+    const staffAuth = hashPassword('KcasStaff2026');
+    const existingStaff = db.prepare("SELECT id FROM users WHERE username = 'staff_cs'").get();
+    if (existingStaff) {
+      db.prepare(`
+        UPDATE users 
+        SET password_hash = ?, salt = ?, role = 'staff', is_active = 1,
+            full_name = 'Prof. S. Priya (Assistant Professor)',
+            email = 'staff.cs@kcas.edu.in', phone = '9842411003',
+            department_id = ?, designation = 'Assistant Professor'
+        WHERE id = ?
+      `).run(staffAuth.hash, staffAuth.salt, deptId, existingStaff.id);
+    } else {
+      db.prepare(`
+        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
+        VALUES ('staff_cs', ?, ?, 'staff', 'Prof. S. Priya (Assistant Professor)', 'staff.cs@kcas.edu.in', '9842411003', ?, 'Assistant Professor', 1)
+      `).run(staffAuth.hash, staffAuth.salt, deptId);
+    }
+
+    console.log('Successfully created/verified 1 HOD (hod_cs) and 1 Staff (staff_cs)!');
+  } catch (err) {
+    console.error('Error in ensureDummyStaffAndHod:', err);
+  }
+}
+
 // Initialize on require
 initSchema();
 seedDatabase();
 cleanupDummyData();
 ensureAdminCredentials();
 ensureKCASDepartments();
+ensureDummyStaffAndHod();
 
 module.exports = {
   db,
