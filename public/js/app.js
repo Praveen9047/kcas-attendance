@@ -8,28 +8,39 @@ const App = {
   deferredPrompt: null,
 
   init() {
-    // Register Service Worker for PWA / WebAPK
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(e => console.log('SW registration fallback:', e));
-    }
+    try {
+      // Register Service Worker for PWA / WebAPK
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(e => console.log('SW registration fallback:', e));
+      }
 
-    // Capture install prompt for Android
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      this.deferredPrompt = e;
-      const banner = document.getElementById('pwaInstallBanner');
-      if (banner) banner.style.display = 'flex';
-    });
+      // Capture install prompt for Android
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        this.deferredPrompt = e;
+        const banner = document.getElementById('pwaInstallBanner');
+        if (banner) banner.style.display = 'flex';
+      });
 
-    this.qrScannerInstance = new AttendanceQRScanner();
-    const user = API.getUser();
-    const token = API.getToken();
+      this.qrScannerInstance = new AttendanceQRScanner();
+      const user = API.getUser();
+      const token = API.getToken();
 
-    if (token && user) {
-      this.currentUser = user;
-      this.renderHeader();
-      this.routeToDashboard(user.role);
-    } else {
+      if (token && user) {
+        if (user.role === 'student') {
+          API.clearAuth();
+          this.currentUser = null;
+          this.showLogin();
+          return;
+        }
+        this.currentUser = user;
+        this.renderHeader();
+        this.routeToDashboard(user.role);
+      } else {
+        this.showLogin();
+      }
+    } catch (err) {
+      console.error('App init error:', err);
       this.showLogin();
     }
   },
@@ -70,21 +81,25 @@ const App = {
 
   showLogin() {
     this.hideAllViews();
-    document.getElementById('loginView').style.display = 'flex';
-    document.getElementById('headerUserNav').style.display = 'none';
-    document.getElementById('desktopNavWrapper').style.display = 'none';
-    document.getElementById('mobileBottomNav').style.display = 'none';
+    const loginView = document.getElementById('loginView');
+    if (loginView) loginView.style.display = 'flex';
+    const headerUserNav = document.getElementById('headerUserNav');
+    if (headerUserNav) headerUserNav.style.display = 'none';
+    const desktopNavWrapper = document.getElementById('desktopNavWrapper');
+    if (desktopNavWrapper) desktopNavWrapper.style.display = 'none';
+    const mobileBottomNav = document.getElementById('mobileBottomNav');
+    if (mobileBottomNav) mobileBottomNav.style.display = 'none';
   },
 
   hideAllViews() {
-    document.getElementById('loginView').style.display = 'none';
-    document.getElementById('studentDashboardView').style.display = 'none';
-    document.getElementById('staffDashboardView').style.display = 'none';
-    document.getElementById('adminDashboardView').style.display = 'none';
+    ['loginView', 'studentDashboardView', 'staffDashboardView', 'adminDashboardView'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
   },
 
   navigateHome() {
-    if (this.currentUser) {
+    if (this.currentUser && this.currentUser.role !== 'student') {
       this.routeToDashboard(this.currentUser.role);
     } else {
       this.showLogin();
@@ -134,17 +149,24 @@ const App = {
   },
 
   routeToDashboard(role) {
+    if (role === 'student') {
+      this.showToast('Student attendance portal is disabled. Please log in with Faculty or Admin account.', 'warning');
+      API.clearAuth();
+      this.currentUser = null;
+      this.showLogin();
+      return;
+    }
+
     this.hideAllViews();
     this.renderNavigation(role);
 
-    if (role === 'student') {
-      document.getElementById('studentDashboardView').style.display = 'block';
-      this.loadStudentDashboard();
-    } else if (role === 'staff') {
-      document.getElementById('staffDashboardView').style.display = 'block';
+    if (role === 'staff') {
+      const staffView = document.getElementById('staffDashboardView');
+      if (staffView) staffView.style.display = 'block';
       this.loadStaffDashboard();
     } else if (role === 'admin') {
-      document.getElementById('adminDashboardView').style.display = 'block';
+      const adminView = document.getElementById('adminDashboardView');
+      if (adminView) adminView.style.display = 'block';
       this.loadAdminDashboard();
     }
   },
@@ -203,178 +225,16 @@ const App = {
   },
 
   // -------------------------------------------------------------
-  // STUDENT CONTROLLERS
+  // STUDENT CONTROLLERS (Disabled)
   // -------------------------------------------------------------
   async loadStudentDashboard() {
-    try {
-      // 1. Profile
-      const pRes = await API.getStudentProfile();
-      if (pRes.profile) {
-        document.getElementById('stuProfileName').textContent = pRes.profile.full_name;
-        document.getElementById('stuProfileReg').textContent = `Reg No: ${pRes.profile.register_number || pRes.profile.username.toUpperCase()}`;
-        document.getElementById('stuProfileClass').textContent = `${pRes.profile.class_name || 'Class'} • Semester ${pRes.profile.semester || 5}`;
-      }
-
-      // 2. Public Settings & Policy
-      const pubInfo = await API.getPublicInfo().catch(() => ({}));
-      const qrEnabled = pubInfo.studentQrEnabled === true;
-      const scanBtnWrapper = document.getElementById('stuScanQrActionWrapper');
-      const qrNotice = document.getElementById('stuQrNoticeBanner');
-      if (scanBtnWrapper) scanBtnWrapper.style.display = qrEnabled ? 'block' : 'none';
-      if (qrNotice) qrNotice.style.display = qrEnabled ? 'none' : 'block';
-
-      // 3. Daily Campus Status (if card present)
-      try {
-        const dailyRes = await API.getStudentDailyStatus().catch(() => null);
-        const morningBadge = document.getElementById('stuMorningBadge');
-        const morningInfo = document.getElementById('stuMorningInfo');
-        const morningBtn = document.getElementById('stuMorningCheckInBtn');
-        const eveningBadge = document.getElementById('stuEveningBadge');
-        const eveningInfo = document.getElementById('stuEveningInfo');
-        const eveningBtn = document.getElementById('stuEveningCheckOutBtn');
-
-        if (dailyRes && dailyRes.record && morningBadge) {
-          const rec = dailyRes.record;
-          if (rec.check_in_time) {
-            morningBadge.className = `status-badge status-${rec.check_in_status || 'present'}`;
-            morningBadge.textContent = `Checked In (${(rec.check_in_status || 'on_time').toUpperCase()})`;
-            if (morningInfo) {
-              morningInfo.style.display = 'block';
-              morningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_in_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
-            }
-            if (morningBtn) {
-              morningBtn.disabled = true;
-              morningBtn.innerHTML = '<span>✓ Morning Checked In</span>';
-            }
-            if (eveningBtn) eveningBtn.disabled = false;
-          } else {
-            morningBadge.className = 'status-badge status-pending';
-            morningBadge.textContent = 'Not Checked In';
-            if (morningBtn) {
-              morningBtn.disabled = false;
-            }
-            if (eveningBtn) eveningBtn.disabled = true;
-          }
-
-          if (rec.check_out_time && eveningBadge) {
-            eveningBadge.className = 'status-badge status-present';
-            eveningBadge.textContent = 'Checked Out';
-            if (eveningInfo) {
-              eveningInfo.style.display = 'block';
-              eveningInfo.innerHTML = `<strong>Time:</strong> ${rec.check_out_time} &bull; <span style="color:#059669;">📍 Campus GPS Verified</span>`;
-            }
-            if (eveningBtn) {
-              eveningBtn.disabled = true;
-              eveningBtn.innerHTML = '<span>✓ Evening Checked Out</span>';
-            }
-          }
-        }
-      } catch (e) {
-        // Handled silently
-      }
-
-      // 4. Check for active session
-      const sRes = await API.getStudentActiveSession();
-      const activeCard = document.getElementById('stuActiveSessionCard');
-      if (sRes.session && qrEnabled) {
-        activeCard.style.display = 'block';
-        document.getElementById('stuActiveSubName').textContent = `${sRes.session.subject_code} - ${sRes.session.subject_name}`;
-        document.getElementById('stuActiveStaff').textContent = `Staff: ${sRes.session.staff_name} • Started at ${sRes.session.start_time}`;
-        if (sRes.session.my_status) {
-          activeCard.style.borderColor = '#059669';
-          activeCard.querySelector('.btn-success').style.display = 'none';
-          document.getElementById('stuActiveStaff').textContent += ` • You are marked ${sRes.session.my_status.toUpperCase()}!`;
-        } else {
-          activeCard.querySelector('.btn-success').style.display = 'inline-flex';
-        }
-      } else {
-        activeCard.style.display = 'none';
-      }
-
-      // 5. Stats & Low-Attendance Alert
-      const stRes = await API.getStudentStats();
-      if (stRes.stats) {
-        const stats = stRes.stats;
-        document.getElementById('stuTotalClasses').textContent = stats.totalClasses;
-        document.getElementById('stuAttendedClasses').textContent = stats.present;
-        document.getElementById('stuLateClasses').textContent = stats.late;
-        document.getElementById('stuAbsentClasses').textContent = stats.absent;
-
-        // Render percentage ring
-        KCASCharts.renderAttendanceRing('stuRingContainer', stats.percentage, 140, 10, stats.threshold);
-
-        // Low attendance warning banner
-        const alertBox = document.getElementById('stuLowAttendanceAlert');
-        if (stats.isLowAttendance) {
-          alertBox.style.display = 'flex';
-          document.getElementById('stuLowAttendanceMsg').textContent = 
-            `Your current attendance is ${stats.percentage}%, which is below the KCAS required threshold of ${stats.threshold}%. Please attend upcoming classes regularly to avoid semester exam debarment.`;
-        } else {
-          alertBox.style.display = 'none';
-        }
-
-        // Render Subject Bars
-        KCASCharts.renderSubjectBars('stuSubjectBarsContainer', stats.subjectBreakdown, stats.threshold);
-      }
-
-      // 4. Timetable
-      const tRes = await API.getStudentTimetable();
-      const ttContainer = document.getElementById('stuTimetableContainer');
-      if (tRes.timetable && tRes.timetable.length > 0) {
-        ttContainer.innerHTML = tRes.timetable.map(t => `
-          <div class="timetable-card">
-            <div class="timetable-period">${t.day_of_week} • Period ${t.period_number} (${t.start_time} - ${t.end_time})</div>
-            <div class="timetable-subject">${t.subject_code}: ${t.subject_name}</div>
-            <div class="timetable-faculty">Faculty: ${t.staff_name} (${t.room_number})</div>
-          </div>
-        `).join('');
-      } else {
-        ttContainer.innerHTML = '<p style="color:#64748B; font-size:13px;">No timetable configured for this class.</p>';
-      }
-
-      // 5. History
-      this.loadStudentHistory();
-
-    } catch (err) {
-      this.showToast(err.message, 'error');
-    }
+    API.clearAuth();
+    this.currentUser = null;
+    this.showLogin();
   },
 
-  async loadStudentHistory() {
-    try {
-      const status = document.getElementById('stuHistoryStatusFilter').value;
-      const res = await API.getStudentHistory({ status });
-      const tbody = document.getElementById('stuHistoryTableBody');
-
-      if (!res.records || res.records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px; color:#64748B;">No attendance records found.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = res.records.map(r => `
-        <tr>
-          <td><strong>${r.date}</strong></td>
-          <td>${r.start_time}</td>
-          <td><strong>${r.subject_code}</strong> - ${r.subject_name}</td>
-          <td>${r.staff_name}</td>
-          <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-          <td><span style="font-size:11px; color:#64748B;">${r.location_verified ? '📍 Campus GPS Verified' : 'QR Verified'}</span></td>
-        </tr>
-      `).join('');
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  switchStudentTab(tab) {
-    if (tab === 'timetable') {
-      document.getElementById('stuTimetableContainer').scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'history') {
-      document.getElementById('stuHistoryTableBody').scrollIntoView({ behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  },
+  async loadStudentHistory() {},
+  switchStudentTab() {},
 
   // QR SCANNER MODAL CONTROLS
   openScannerModal() {
