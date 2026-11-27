@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>KCAS Attendance Management System | Krishna College of Arts and Science</title>
+  <title>KCAS Attendance & College Management System | Krishna College of Arts and Science</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -30,8 +30,12 @@
       </a>
 
       <div class="user-nav" id="headerUserNav" style="display:none;">
+        <button class="btn btn-light btn-sm" id="headerNotifBtn" onclick="App.openNotificationsModal()" title="Notifications" style="position:relative; padding:6px 10px;">
+          <span>🔔</span>
+          <span id="headerNotifBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:#DC2626; color:#fff; font-size:10px; font-weight:800; border-radius:10px; padding:1px 5px;">0</span>
+        </button>
         <div class="user-badge" id="headerUserBadge">
-          <span class="role-tag" id="headerRoleTag">STUDENT</span>
+          <span class="role-tag" id="headerRoleTag">FACULTY</span>
           <span id="headerUserName">Loading...</span>
         </div>
         <button class="btn btn-outline btn-sm" onclick="API.logout()" title="Logout">
@@ -52,8 +56,7 @@
   <main class="main-wrapper" id="appMain">
     
     <!-- ============================================================ -->
-    <!-- ============================================================ -->
-    <!-- VIEW: LOGIN PAGE -->
+    <!-- VIEW 1: LOGIN PAGE -->
     <!-- ============================================================ -->
     <div id="loginView" class="login-page-container">
       <div class="login-card">
@@ -68,8 +71,8 @@
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="font-size:20px;">🏛️</span>
             <div>
-              <strong style="font-size:12px; color:#B91C1C; display:block;">Official Staff & Admin Portal</strong>
-              <span style="font-size:11px; color:#64748B;">Student self-attendance is closed. Sign in with Faculty or Admin credentials.</span>
+              <strong style="font-size:12px; color:#B91C1C; display:block;">College Staff Attendance & Management System</strong>
+              <span style="font-size:11px; color:#64748B;">Sign in with Master Admin, HOD, or Faculty Staff credentials.</span>
             </div>
           </div>
         </div>
@@ -77,10 +80,10 @@
         <!-- Android App Install Banner -->
         <div id="pwaInstallBanner" style="display:none; background:#FFF1F2; border:1px solid #FECDD3; border-radius:10px; padding:10px 14px; margin-bottom:16px; align-items:center; justify-content:space-between;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:22px;">📲</span>
+            <span style="font-size:22px;">📱</span>
             <div>
               <strong style="font-size:12px; color:#B91C1C; display:block;">Install KCAS Android App</strong>
-              <span style="font-size:11px; color:#64748B;">Add to home screen as standalone APK app</span>
+              <span style="font-size:11px; color:#64748B;">Add to home screen as standalone app</span>
             </div>
           </div>
           <button type="button" class="btn btn-primary btn-sm" onclick="App.triggerPwaInstall()">Install</button>
@@ -89,11 +92,14 @@
         <form id="loginForm" onsubmit="App.handleLogin(event)">
           <div class="form-group">
             <label class="form-label" for="loginUsername">Username / Staff ID</label>
-            <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username or staff ID" required autocomplete="username">
+            <input type="text" id="loginUsername" class="form-input" placeholder="Enter username or staff ID" required autocomplete="username">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="loginPassword">Password</label>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label class="form-label" for="loginPassword">Password</label>
+              <a href="#" onclick="App.showPasswordResetHint(event)" style="font-size:11px; color:#B91C1C; font-weight:600;">Reset Password?</a>
+            </div>
             <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
           </div>
 
@@ -102,81 +108,176 @@
           </button>
         </form>
 
-        <!-- Quick 1-Click Login for HOD, Staff & Admin -->
+        <!-- Quick 1-Click Login for HOD, Staff & Master Admin -->
         <div style="margin-top:18px; padding-top:14px; border-top:1px dashed #FECDD3;">
-          <p style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Quick 1-Click Sign In:</p>
+          <p style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Quick 1-Click Role Sign In:</p>
           <div style="display:flex; flex-direction:column; gap:6px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('KRISHNACOLLEGEADMIN', 'KCASCOLLEGE2027')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
+              <span>👑 <strong>Master Admin:</strong> Principal / Administrator</span>
+              <span style="font-size:10px; color:#B91C1C; font-weight:700;">Admin ➔</span>
+            </button>
             <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('hod_cs', 'KcasHod2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
-              <span>🎓 <strong>HOD Login:</strong> Dr. K. Ramesh (CS)</span>
-              <span style="font-size:11px; color:#B91C1C; font-weight:700;">Tap to Login &rarr;</span>
+              <span>🎓 <strong>HOD Login:</strong> Dr. K. Ramesh (Computer Science)</span>
+              <span style="font-size:10px; color:#B91C1C; font-weight:700;">HOD ➔</span>
             </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('staff_cs', 'KcasStaff2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#E2E8F0; background:#F8FAFC;">
-              <span>👨‍🏫 <strong>Staff Login:</strong> Prof. S. Priya (CS)</span>
-              <span style="font-size:11px; color:#475569; font-weight:700;">Tap to Login &rarr;</span>
-            </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('KRISHNACOLLEGEADMIN', 'KCASCOLLEGE2027')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#E2E8F0; background:#FFFFFF;">
-              <span>👑 <strong>Admin Login:</strong> Principal KCAS</span>
-              <span style="font-size:11px; color:#475569; font-weight:700;">Tap to Login &rarr;</span>
+            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('staff_cs', 'KcasStaff2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
+              <span>👨‍🏫 <strong>Staff Login:</strong> Prof. S. Saravanan (Assistant Professor)</span>
+              <span style="font-size:10px; color:#B91C1C; font-weight:700;">Staff ➔</span>
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Disabled Student View Stub to prevent any DOM lookup errors -->
+    <!-- Disabled Student Stub -->
     <div id="studentDashboardView" style="display:none;"></div>
 
     <!-- ============================================================ -->
-    <!-- VIEW: STAFF DASHBOARD -->
+    <!-- VIEW 2: STAFF DASHBOARD -->
     <!-- ============================================================ -->
     <div id="staffDashboardView" style="display:none;">
 
-      <!-- Staff Profile & Check-in Card -->
+      <!-- Staff Profile & Live Clock Card -->
       <div class="card" style="background: linear-gradient(135deg, #FFFFFF 60%, #FEF2F2 100%);">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
-          <div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <h2 id="staffProfileName" style="font-size:20px; color:#B91C1C;">Staff Name</h2>
-              <span class="role-tag">FACULTY</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <img id="staffProfilePhoto" src="/icons/college-logo.png" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2.5px solid #B91C1C; background:#fff;" alt="Staff Photo">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 id="staffProfileName" style="font-size:18px; color:#B91C1C;">Welcome, Staff</h2>
+                <span class="role-tag" id="staffProfileRoleTag">FACULTY</span>
+              </div>
+              <p id="staffProfileDesig" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Assistant Professor</p>
+              <p id="staffProfileDept" style="font-size:12px; color:#64748B;">Department of Computer Science • KCAS Karur</p>
             </div>
-            <p id="staffProfileDesig" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Associate Professor & HOD</p>
-            <p id="staffProfileDept" style="font-size:13px; color:#64748B;">Department of Computer Science • KCAS Karur</p>
           </div>
 
-          <!-- Staff Daily Biometric Check-in / Check-out Controls (Face Photo + GPS) -->
-          <div style="background:#FFFFFF; border:1px solid #FECDD3; border-radius:12px; padding:12px 16px; text-align:right;">
-            <div style="font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; margin-bottom:4px;">Today's Attendance (Face + GPS)</div>
-            <div id="staffCheckInStatusDisplay" style="margin-bottom:8px;">
-              <span class="status-badge status-pending">Not Checked In</span>
-            </div>
-            <div style="display:flex; gap:8px;">
-              <button id="staffCheckInBtn" class="btn btn-primary btn-sm" onclick="App.triggerStaffDailyCheckIn()">
-                <span>📸 Check In</span>
-              </button>
-              <button id="staffCheckOutBtn" class="btn btn-outline btn-sm" onclick="App.triggerStaffDailyCheckOut()" disabled>
-                <span>📸 Check Out</span>
-              </button>
-            </div>
+          <div style="text-align:right;">
+            <div id="staffLiveClock" style="font-size:18px; font-weight:800; color:#0F172A; font-family:monospace;">--:--:--</div>
+            <div id="staffLiveDate" style="font-size:12px; color:#64748B; font-weight:600;">Today</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Staff Daily Attendance Card (Face + 100m GPS Verification) -->
+      <div class="card" style="border: 2px solid #FECDD3;">
+        <div class="card-header" style="background:#FEF2F2; margin:-20px -20px 14px -20px; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
+          <h3 class="card-title" style="color:#B91C1C; font-size:16px; font-weight:800;">
+            🛡️ Daily Biometric Attendance (Face + 100m Campus GPS)
+          </h3>
+          <span id="staffAttendanceStatusBadge" class="status-badge status-pending">Not Checked In</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:14px;">
+          <div style="background:#FAF9F9; border:1px solid #F1F5F9; border-radius:10px; padding:10px 14px;">
+            <span style="font-size:11px; color:#64748B; font-weight:700; text-transform:uppercase;">Check-In Time</span>
+            <div id="staffCheckInTime" style="font-size:15px; font-weight:800; color:#0F172A; margin-top:2px;">--:--</div>
+            <div id="staffGpsStatusIn" style="font-size:10px; color:#059669; margin-top:2px;">GPS: Pending</div>
+          </div>
+
+          <div style="background:#FAF9F9; border:1px solid #F1F5F9; border-radius:10px; padding:10px 14px;">
+            <span style="font-size:11px; color:#64748B; font-weight:700; text-transform:uppercase;">Check-Out Time</span>
+            <div id="staffCheckOutTime" style="font-size:15px; font-weight:800; color:#0F172A; margin-top:2px;">--:--</div>
+            <div id="staffFaceStatusIn" style="font-size:10px; color:#059669; margin-top:2px;">Face: Pending</div>
+          </div>
+
+          <div style="background:#FAF9F9; border:1px solid #F1F5F9; border-radius:10px; padding:10px 14px;">
+            <span style="font-size:11px; color:#64748B; font-weight:700; text-transform:uppercase;">Campus Restriction</span>
+            <div style="font-size:13px; font-weight:700; color:#B91C1C; margin-top:2px;">100m Radius</div>
+            <div style="font-size:10px; color:#64748B; margin-top:2px;">Palayam Road Campus (PIN 621301)</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <button id="staffCheckInBtn" class="btn btn-primary" style="flex:1;" onclick="App.triggerStaffDailyCheckIn()">
+            <span>📸 Biometric Check-In</span>
+          </button>
+          <button id="staffCheckOutBtn" class="btn btn-outline" style="flex:1;" onclick="App.triggerStaffDailyCheckOut()" disabled>
+            <span>📸 Biometric Check-Out</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Staff Leave Balances Row -->
+      <div class="card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 class="card-title">🏖️ Leave Balances & Status</h3>
+          <button class="btn btn-outline btn-sm" onclick="App.openApplyLeaveModal()">+ Apply Leave</button>
+        </div>
+        <div class="leave-grid">
+          <div class="leave-card">
+            <span class="leave-count" id="staffLeaveCL">12</span>
+            <span class="leave-type">Casual Leave (CL)</span>
+          </div>
+          <div class="leave-card">
+            <span class="leave-count" id="staffLeaveML">10</span>
+            <span class="leave-type">Medical Leave (ML)</span>
+          </div>
+          <div class="leave-card">
+            <span class="leave-count" id="staffLeaveOD">15</span>
+            <span class="leave-type">On Duty (OD)</span>
+          </div>
+          <div class="leave-card">
+            <span class="leave-count" id="staffLeavePER">2</span>
+            <span class="leave-type">Permission (PER)</span>
+          </div>
+        </div>
+        <div id="staffActiveLeaveBanner" style="display:none; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:10px 14px; font-size:12px; color:#1E40AF;">
+          <strong>ℹ️ Active Leave:</strong> You have an approved leave scheduled for today.
+        </div>
+      </div>
+
+      <!-- Interactive Monthly Attendance Calendar -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📅 Interactive Monthly Attendance Calendar</h3>
+        </div>
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <button class="calendar-nav-btn" onclick="App.changeCalendarMonth(-1)">◀ Prev</button>
+            <span class="calendar-month-title" id="staffCalendarMonthYear">November 2026</span>
+            <button class="calendar-nav-btn" onclick="App.changeCalendarMonth(1)">Next ▶</button>
+          </div>
+
+          <div class="calendar-grid" id="staffCalendarDayHeaders">
+            <div class="calendar-day-header">Sun</div>
+            <div class="calendar-day-header">Mon</div>
+            <div class="calendar-day-header">Tue</div>
+            <div class="calendar-day-header">Wed</div>
+            <div class="calendar-day-header">Thu</div>
+            <div class="calendar-day-header">Fri</div>
+            <div class="calendar-day-header">Sat</div>
+          </div>
+
+          <div class="calendar-grid" id="staffCalendarGrid" style="margin-top:6px;">
+            <!-- Dynamically populated 35-42 days -->
+          </div>
+
+          <div class="calendar-legend">
+            <div class="legend-item"><span class="legend-color day-present"></span><span>Present (Green)</span></div>
+            <div class="legend-item"><span class="legend-color day-late"></span><span>Late (Orange)</span></div>
+            <div class="legend-item"><span class="legend-color day-leave"></span><span>Leave (Blue)</span></div>
+            <div class="legend-item"><span class="legend-color day-absent"></span><span>Absent (Red)</span></div>
+            <div class="legend-item"><span class="legend-color day-holiday"></span><span>Holiday (Purple)</span></div>
           </div>
         </div>
       </div>
 
       <!-- Class Period Duty & Teaching Activity Log Form -->
       <div class="card" style="border: 2px solid #FECDD3;">
-        <div class="card-header" style="background: #FEF2F2; margin: -20px -20px 16px -20px; padding: 14px 20px;">
+        <div class="card-header" style="background:#FEF2F2; margin:-20px -20px 16px -20px; padding:14px 20px;">
           <div>
-            <h3 class="card-title" style="color: #B91C1C; font-size: 17px; font-weight: 800;">
-              📝 Log Class Period Duty & Teaching Activity
+            <h3 class="card-title" style="color:#B91C1C; font-size:17px; font-weight:800;">
+              📋 Staff Class Duty Submission (Periods 1 to 6)
             </h3>
-            <p style="font-size: 12px; color: #64748B; margin-top: 2px;">
-              Record department visited, class, period hour, subject taught, lesson summary, and classroom/blackboard photo proof.
+            <p style="font-size:12px; color:#64748B; margin-top:2px;">
+              Submit your period duty: department, class, period hour, subject, lesson notes, and mandatory blackboard/classroom photo proof.
             </p>
           </div>
         </div>
 
         <form id="periodLogForm" onsubmit="App.handlePeriodLogSubmit(event)">
           <div class="duty-log-form">
-            <!-- Department -->
             <div class="form-group">
               <label class="form-label" for="periodDeptSelect">Department Visited</label>
               <select id="periodDeptSelect" class="form-select" required onchange="App.handlePeriodDeptChange()">
@@ -184,7 +285,6 @@
               </select>
             </div>
 
-            <!-- Class -->
             <div class="form-group">
               <label class="form-label" for="periodClassSelect">Class / Degree</label>
               <select id="periodClassSelect" class="form-select" required>
@@ -192,7 +292,6 @@
               </select>
             </div>
 
-            <!-- Period / Hour -->
             <div class="form-group">
               <label class="form-label" for="periodNumberSelect">Period / Hour</label>
               <select id="periodNumberSelect" class="form-select" required>
@@ -205,18 +304,16 @@
               </select>
             </div>
 
-            <!-- Subject -->
             <div class="form-group">
               <label class="form-label" for="periodSubjectInput">Subject Taught</label>
-              <input type="text" id="periodSubjectInput" class="form-input" placeholder="e.g. Relational Database Management Systems" required>
+              <input type="text" id="periodSubjectInput" class="form-input" placeholder="e.g. Data Structures & Algorithms" required>
             </div>
           </div>
 
-          <!-- Lesson Topic & Time Details -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 12px;">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-top:12px;">
             <div class="form-group">
               <label class="form-label" for="periodLessonTopic">Lesson / Topic Covered</label>
-              <input type="text" id="periodLessonTopic" class="form-input" placeholder="e.g. Chapter 4 - 3NF and BCNF Normalization" required>
+              <input type="text" id="periodLessonTopic" class="form-input" placeholder="e.g. Binary Search Trees & AVL Traversals" required>
             </div>
 
             <div class="form-group">
@@ -225,33 +322,33 @@
             </div>
           </div>
 
-          <div class="form-group" style="margin-top: 12px;">
-            <label class="form-label" for="periodLessonSummary">Classroom Activity & Teaching Notes</label>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" for="periodLessonSummary">Lesson Activity Notes</label>
             <textarea id="periodLessonSummary" class="form-textarea" rows="3" placeholder="Describe the topics discussed, practical problems worked out on the board, student queries answered, assignments given..." required></textarea>
           </div>
 
           <!-- Blackboard / Classroom Photo Proof -->
-          <div class="form-group" style="margin-top: 12px; background: #FAF9F9; border: 1px dashed #CBD5E1; border-radius: 12px; padding: 14px;">
-            <label class="form-label" style="font-weight: 700; color: #B91C1C;">
-              📷 Classroom / Blackboard Photo Proof
+          <div class="form-group" style="margin-top:12px; background:#FAF9F9; border:1px dashed #CBD5E1; border-radius:12px; padding:14px;">
+            <label class="form-label" style="font-weight:700; color:#B91C1C;">
+              📸 Blackboard / Classroom Photo Proof (Mandatory)
             </label>
-            <p style="font-size: 11px; color: #64748B; margin-bottom: 8px;">
-              Take a photo of the blackboard or classroom with your mobile camera or upload an image file.
+            <p style="font-size:11px; color:#64748B; margin-bottom:8px;">
+              Attach camera photo proof of the blackboard or classroom showing teaching content.
             </p>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <input type="file" id="periodPhotoInput" accept="image/*" class="form-input" style="flex: 1; min-width: 200px;" onchange="App.handlePeriodPhotoSelect(event)">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <input type="file" id="periodPhotoInput" accept="image/*" class="form-input" style="flex:1; min-width:200px;" onchange="App.handlePeriodPhotoSelect(event)">
               <button type="button" class="btn btn-outline btn-sm" onclick="App.snapPeriodPhotoCamera()">
-                <span>📸 Open Camera</span>
+                <span>📷 Capture Camera</span>
               </button>
             </div>
-            <div id="periodPhotoPreviewBox" style="margin-top: 10px; display: none;">
-              <img id="periodPhotoPreview" src="" alt="Blackboard Photo Preview" class="lesson-photo-preview" style="max-height: 180px; display: block; border-radius: 8px; border: 2px solid #B91C1C;">
-              <span style="font-size: 11px; color: #059669; font-weight: 700; margin-top: 4px; display: block;">✓ Photo proof attached</span>
+            <div id="periodPhotoPreviewBox" style="margin-top:10px; display:none;">
+              <img id="periodPhotoPreview" src="" alt="Blackboard Photo Preview" class="lesson-photo-preview" style="max-height:180px; display:block; border-radius:8px; border:2px solid #B91C1C;">
+              <span style="font-size:11px; color:#059669; font-weight:700; margin-top:4px; display:block;">✓ Photo proof attached</span>
             </div>
           </div>
 
-          <button type="submit" id="periodSubmitBtn" class="btn btn-primary btn-lg" style="margin-top: 16px; width: 100%;">
-            <span>🚀 Save & Submit Class Period Duty Log</span>
+          <button type="submit" id="periodSubmitBtn" class="btn btn-primary btn-lg" style="margin-top:16px; width:100%;">
+            <span>🚀 Submit Class Period Duty</span>
           </button>
         </form>
       </div>
@@ -259,7 +356,7 @@
       <!-- Today's Logged Periods Table -->
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">📋 My Logged Periods Today</h3>
+          <h3 class="card-title">📋 Today's Submitted Class Duties</h3>
         </div>
         <div class="table-container">
           <table class="data-table">
@@ -275,7 +372,7 @@
               </tr>
             </thead>
             <tbody id="staffMyLogsTableBody">
-              <tr><td colspan="7" style="text-align:center; padding: 16px; color: #64748B;">No period duty logs recorded today yet.</td></tr>
+              <tr><td colspan="7" style="text-align:center; padding:16px; color:#64748B;">No class duties recorded today yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -284,7 +381,7 @@
       <!-- Staff Monthly Attendance History -->
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">📅 My Monthly Check-in Log</h3>
+          <h3 class="card-title">🗓️ Recent Attendance History</h3>
         </div>
         <div class="table-container">
           <table class="data-table">
@@ -293,12 +390,13 @@
                 <th>Date</th>
                 <th>Check-in</th>
                 <th>Check-out</th>
-                <th>Hours Logged</th>
+                <th>Hours</th>
+                <th>Verification</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody id="staffHistoryTableBody">
-              <tr><td colspan="5" style="text-align:center;">Loading logs...</td></tr>
+              <tr><td colspan="6" style="text-align:center;">Loading logs...</td></tr>
             </tbody>
           </table>
         </div>
@@ -307,28 +405,242 @@
     </div>
 
     <!-- ============================================================ -->
+    <!-- VIEW 3: HOD DASHBOARD (Dedicated Department-Isolated View)     -->
     <!-- ============================================================ -->
-    <!-- VIEW: ADMIN DASHBOARD -->
+    <div id="hodDashboardView" style="display:none;">
+
+      <!-- HOD Department Header Card -->
+      <div class="card" style="background: linear-gradient(135deg, #FFFFFF 60%, #FEF2F2 100%);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <img id="hodProfilePhoto" src="/icons/college-logo.png" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2.5px solid #B91C1C; background:#fff;" alt="HOD Photo">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 id="hodProfileName" style="font-size:18px; color:#B91C1C;">Dr. K. Ramesh</h2>
+                <span class="role-tag" style="background:#B91C1C;">HOD</span>
+              </div>
+              <p id="hodProfileDept" style="font-weight:700; color:#475569; font-size:13px; margin-top:2px;">Department of Computer Science</p>
+              <p style="font-size:12px; color:#64748B;">KCAS Karur • Authorized Department Administration</p>
+            </div>
+          </div>
+
+          <div style="text-align:right;">
+            <button class="btn btn-primary btn-sm" onclick="App.triggerStaffDailyCheckIn()">
+              <span>📸 HOD Daily Attendance</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOD Department Metrics Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value" id="hodMetricTotalStaff">0</div>
+          <div class="metric-label">Dept Staff</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#059669;" id="hodMetricPresent">0</div>
+          <div class="metric-label">Present Today</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#DC2626;" id="hodMetricAbsent">0</div>
+          <div class="metric-label">Absent Today</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#D97706;" id="hodMetricLate">0</div>
+          <div class="metric-label">Late Arrivals</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#2563EB;" id="hodMetricWorking">0</div>
+          <div class="metric-label">Currently Working</div>
+        </div>
+      </div>
+
+      <!-- Sub-tabs for HOD -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header" style="border-bottom:1px solid #FECDD3; padding-bottom:12px; margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="tab-btn active" id="hodTabBtnAttendance" onclick="App.switchHodSubTab('attendance')">👥 Department Staff Attendance</button>
+          <button class="tab-btn" id="hodTabBtnDuty" onclick="App.switchHodSubTab('duty')">📋 Class Duty Monitoring</button>
+          <button class="tab-btn" id="hodTabBtnLeaves" onclick="App.switchHodSubTab('leaves')">🏖️ Pending Leaves (<span id="hodPendingLeaveCount">0</span>)</button>
+          <button class="tab-btn" id="hodTabBtnMonthly" onclick="App.switchHodSubTab('monthly')">📊 Monthly Reports</button>
+        </div>
+
+        <!-- HOD SUB-VIEW 1: DEPARTMENT ATTENDANCE -->
+        <div id="hodSubTabAttendance">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Faculty Staff</th>
+                  <th>Designation</th>
+                  <th>Check In</th>
+                  <th>Check Out</th>
+                  <th>GPS Status</th>
+                  <th>Face Match</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="hodStaffAttendanceTableBody">
+                <tr><td colspan="7" style="text-align:center;">Loading department attendance...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- HOD SUB-VIEW 2: CLASS DUTY MONITORING -->
+        <div id="hodSubTabDuty" style="display:none;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Faculty</th>
+                  <th>Class</th>
+                  <th>Subject</th>
+                  <th>Lesson Activity Notes</th>
+                  <th>Blackboard Proof</th>
+                </tr>
+              </thead>
+              <tbody id="hodDutyLogsTableBody">
+                <tr><td colspan="6" style="text-align:center;">Loading class duties...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- HOD SUB-VIEW 3: PENDING LEAVE REQUESTS -->
+        <div id="hodSubTabLeaves" style="display:none;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Faculty Staff</th>
+                  <th>Leave Type</th>
+                  <th>From Date</th>
+                  <th>To Date</th>
+                  <th>Reason</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="hodPendingLeavesTableBody">
+                <tr><td colspan="6" style="text-align:center;">No pending leave requests.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- HOD SUB-VIEW 4: MONTHLY DEPARTMENT REPORT -->
+        <div id="hodSubTabMonthly" style="display:none;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Staff Name</th>
+                  <th>Designation</th>
+                  <th>Days Present</th>
+                  <th>Days Absent</th>
+                  <th>Late Marks</th>
+                  <th>Monthly Rate</th>
+                </tr>
+              </thead>
+              <tbody id="hodMonthlyReportTableBody">
+                <tr><td colspan="6" style="text-align:center;">Loading monthly report...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW 4: MASTER ADMIN DASHBOARD (Comprehensive 8 Stats & 10 Actions) -->
     <!-- ============================================================ -->
     <div id="adminDashboardView" style="display:none;">
 
-      <!-- Admin Top Metrics Grid -->
-      <div class="metrics-grid">
+      <!-- Master Admin Exact 8 Statistics Cards -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;">
         <div class="metric-card">
-          <div class="metric-value" id="adminMetricStaff">0</div>
-          <div class="metric-label">Faculty Staff & HODs</div>
+          <div class="metric-value" id="adminMetricTotalStaff">0</div>
+          <div class="metric-label">Total Staff</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" style="color:#059669;" id="adminMetricTodayRate">0</div>
-          <div class="metric-label">Today's Faculty Check-ins</div>
+          <div class="metric-value" style="color:#B91C1C;" id="adminMetricTotalHods">0</div>
+          <div class="metric-label">Total HODs</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" style="color:#B91C1C;" id="adminMetricDutyLogs">0</div>
-          <div class="metric-label">Today's Period Duty Logs</div>
+          <div class="metric-value" style="color:#059669;" id="adminMetricPresentToday">0</div>
+          <div class="metric-label">Present Today</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" style="color:#475569;" id="adminMetricDepts">5</div>
-          <div class="metric-label">Active Departments</div>
+          <div class="metric-value" style="color:#DC2626;" id="adminMetricAbsentToday">0</div>
+          <div class="metric-label">Absent Today</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#D97706;" id="adminMetricLateArrivals">0</div>
+          <div class="metric-label">Late Arrivals</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#2563EB;" id="adminMetricOnLeave">0</div>
+          <div class="metric-label">On Leave</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#64748B;" id="adminMetricNotCheckedIn">0</div>
+          <div class="metric-label">Not Checked In</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" style="color:#059669;" id="adminMetricWorkingNow">0</div>
+          <div class="metric-label">Working Now</div>
+        </div>
+      </div>
+
+      <!-- 10 Quick Actions Grid -->
+      <div class="card" style="padding:14px 18px; margin-bottom:16px; border:1.5px solid #FECDD3;">
+        <h4 style="font-size:12px; font-weight:800; color:#B91C1C; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">
+          ⚡ Master Admin Quick Actions
+        </h4>
+        <div class="quick-actions-grid">
+          <div class="quick-action-btn" onclick="App.adminQuickAction('users_staff')">
+            <span class="quick-action-icon">👨‍🏫</span>
+            <span class="quick-action-label">Manage Staff</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('users_hod')">
+            <span class="quick-action-icon">🎓</span>
+            <span class="quick-action-label">Manage HODs</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('attendance')">
+            <span class="quick-action-icon">🛡️</span>
+            <span class="quick-action-label">Attendance Mgmt</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('depts')">
+            <span class="quick-action-icon">🏛️</span>
+            <span class="quick-action-label">Departments</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('duty')">
+            <span class="quick-action-icon">📋</span>
+            <span class="quick-action-label">Class Duty Monitor</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('leaves')">
+            <span class="quick-action-icon">🏖️</span>
+            <span class="quick-action-label">Leave Mgmt</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('reports')">
+            <span class="quick-action-icon">📊</span>
+            <span class="quick-action-label">Attendance Reports</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('analytics')">
+            <span class="quick-action-icon">📈</span>
+            <span class="quick-action-label">Analytics</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('notifications')">
+            <span class="quick-action-icon">📢</span>
+            <span class="quick-action-label">Notifications</span>
+          </div>
+          <div class="quick-action-btn" onclick="App.adminQuickAction('settings')">
+            <span class="quick-action-icon">⚙️</span>
+            <span class="quick-action-label">App Settings</span>
+          </div>
         </div>
       </div>
 
@@ -337,8 +649,6 @@
         
         <!-- ADMIN SUB-TAB 1: OVERVIEW -->
         <div id="adminTabOverview">
-          
-          <!-- Staff Check-in Status Today -->
           <div class="card">
             <div class="card-header">
               <h3 class="card-title">👨‍🏫 Faculty Daily Attendance Today (Face + GPS)</h3>
@@ -348,11 +658,11 @@
                 <thead>
                   <tr>
                     <th>Faculty Name</th>
-                    <th>Designation</th>
+                    <th>Role</th>
                     <th>Department</th>
                     <th>Check In</th>
                     <th>Check Out</th>
-                    <th>Working Hours</th>
+                    <th>GPS Verification</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -363,49 +673,33 @@
             </div>
           </div>
 
-          <!-- Quick Preview: Recent Period Duty Logs Today -->
-          <div class="card" style="margin-top: 20px;">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 class="card-title">📝 Recent Class Period Teaching Logs Today</h3>
-              <button class="btn btn-outline btn-sm" onclick="App.switchAdminTab('periodlogs')">View All Period Logs ➔</button>
+          <!-- Recent Activities Section -->
+          <div class="card" style="margin-top:16px;">
+            <div class="card-header">
+              <h3 class="card-title">🕒 Recent Campus Activities Timeline</h3>
             </div>
-            <div class="table-container">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Period</th>
-                    <th>Faculty</th>
-                    <th>Department & Class</th>
-                    <th>Subject</th>
-                    <th>Lesson Notes</th>
-                    <th>Photo Proof</th>
-                  </tr>
-                </thead>
-                <tbody id="adminOverviewDutyLogsBody">
-                  <tr><td colspan="6" style="text-align:center; padding:14px; color:#64748B;">Loading today's teaching logs...</td></tr>
-                </tbody>
-              </table>
+            <div class="activity-timeline" id="adminRecentActivitiesTimeline">
+              <div style="text-align:center; padding:12px; color:#64748B;">Loading latest activities...</div>
             </div>
           </div>
-
         </div>
 
-        <!-- ADMIN SUB-TAB 2: USER MANAGEMENT (STAFF & HOD ONLY) -->
+        <!-- ADMIN SUB-TAB 2: USER MANAGEMENT (STAFF & HODS) -->
         <div id="adminTabUsers" style="display:none;">
           <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
               <div>
                 <h3 class="card-title" style="color:#B91C1C; font-size:17px; font-weight:800;">👥 Faculty Staff & HOD Management</h3>
-                <p style="font-size:12px; color:#64748B; margin-top:2px;">Register new faculty members or remove staff profiles. All dummy accounts removed.</p>
+                <p style="font-size:12px; color:#64748B; margin-top:2px;">Register faculty or HOD accounts, reset passwords, or remove profiles.</p>
               </div>
               <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary btn-sm" onclick="App.openCreateUserModal()">➕ Add Faculty Staff</button>
+                <button class="btn btn-primary btn-sm" onclick="App.openCreateUserModal()">➕ Add Staff / HOD</button>
+                <button class="btn btn-outline btn-sm" onclick="App.openCsvImportModal()">📥 Bulk CSV</button>
               </div>
             </div>
 
-            <!-- User Search -->
             <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-              <input type="text" id="adminUserSearchInput" class="form-input" style="flex:1; min-width:200px;" placeholder="Search faculty by name, staff ID, department, phone..." oninput="App.filterAdminUsers()">
+              <input type="text" id="adminUserSearchInput" class="form-input" style="flex:1; min-width:200px;" placeholder="Search faculty by name, staff ID, department..." oninput="App.filterAdminUsers()">
             </div>
 
             <div class="table-container">
@@ -413,39 +707,37 @@
                 <thead>
                   <tr>
                     <th>Photo</th>
-                    <th>Staff ID / Username</th>
+                    <th>Staff ID</th>
                     <th>Full Name</th>
-                    <th>Designation</th>
+                    <th>Role</th>
                     <th>Department</th>
                     <th>Phone</th>
-                    <th>Address</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="adminUsersTableBody">
-                  <tr><td colspan="9" style="text-align:center;">Loading faculty staff...</td></tr>
+                  <tr><td colspan="8" style="text-align:center;">Loading faculty staff...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- ADMIN SUB-TAB 3: FACULTY CLASS PERIOD DUTY LOGS & PHOTO PROOFS -->
+        <!-- ADMIN SUB-TAB 3: CLASS PERIOD DUTY LOGS -->
         <div id="adminTabPeriodLogs" style="display:none;">
           <div class="card">
             <div class="card-header">
               <div>
-                <h3 class="card-title" style="color: #B91C1C; font-size: 17px; font-weight: 800;">
-                  🏫 Faculty Class Period Duty Logs & Blackboard Photo Proofs
+                <h3 class="card-title" style="color:#B91C1C; font-size:17px; font-weight:800;">
+                  🏫 College Class Duty Monitoring & Photo Proofs
                 </h3>
-                <p style="font-size: 12px; color: #64748B; margin-top: 2px;">
-                  Review faculty department visits, hours, subjects taught, detailed classroom activity notes, and blackboard photo proofs.
+                <p style="font-size:12px; color:#64748B; margin-top:2px;">
+                  Review faculty period submissions across all 14 departments with blackboard photo proofs.
                 </p>
               </div>
             </div>
 
-            <!-- Filters -->
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px;">
               <div>
                 <label class="form-label">Date</label>
@@ -480,64 +772,115 @@
                     <th>Department</th>
                     <th>Class</th>
                     <th>Subject</th>
-                    <th>Lesson Activity & Notes</th>
+                    <th>Lesson Notes</th>
                     <th>Blackboard Photo</th>
                   </tr>
                 </thead>
                 <tbody id="adminPeriodLogsTableBody">
-                  <tr><td colspan="7" style="text-align:center; padding:16px; color:#64748B;">Loading faculty period logs...</td></tr>
+                  <tr><td colspan="7" style="text-align:center;">Loading duty logs...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- ADMIN SUB-TAB 4: ACADEMICS -->
-        <div id="adminTabAcademics" style="display:none;">
+        <!-- ADMIN SUB-TAB 4: LEAVE MANAGEMENT -->
+        <div id="adminTabLeaves" style="display:none;">
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">🏛️ Academic Departments & Classes</h3>
+              <h3 class="card-title">🏖️ College Leave Management & Approvals</h3>
+              <p style="font-size:12px; color:#64748B;">Approve or reject leave applications submitted by faculty staff and HODs.</p>
             </div>
-            
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px;">
-              <!-- Departments & Classes -->
-              <div>
-                <h4 style="font-size:14px; font-weight:700; color:#B91C1C; margin-bottom:8px;">Departments & Classes</h4>
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr><th>Class Code</th><th>Class Name</th><th>Degree & Semester</th></tr>
-                    </thead>
-                    <tbody id="adminAcademicsClassBody">
-                      <tr><td colspan="3">Loading...</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Staff Allocations -->
-              <div>
-                <h4 style="font-size:14px; font-weight:700; color:#B91C1C; margin-bottom:8px;">Faculty Subject Allocations</h4>
-                <div class="table-container">
-                  <table class="data-table">
-                    <thead>
-                      <tr><th>Faculty</th><th>Class</th><th>Subject</th></tr>
-                    </thead>
-                    <tbody id="adminAcademicsAllocBody">
-                      <tr><td colspan="3">Loading...</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Role & Dept</th>
+                    <th>Leave Type</th>
+                    <th>From Date</th>
+                    <th>To Date</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="adminLeavesTableBody">
+                  <tr><td colspan="8" style="text-align:center;">Loading leaves...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        <!-- ADMIN SUB-TAB 5: SETTINGS & GEOFENCE -->
+        <!-- ADMIN SUB-TAB 5: REPORTS & ANALYTICS -->
+        <div id="adminTabReports" style="display:none;">
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h3 class="card-title">📊 Attendance Reports & Export</h3>
+                <p style="font-size:12px; color:#64748B;">Generate daily, monthly, department, and duty reports in PDF and Excel/CSV formats.</p>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline btn-sm" onclick="App.exportAttendanceCsv()">📥 Export Excel / CSV</button>
+                <button class="btn btn-primary btn-sm" onclick="App.printAttendanceReport()">🖨️ Print / Save PDF</button>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
+              <div>
+                <label class="form-label">Report Type</label>
+                <select id="adminReportTypeSelect" class="form-select" onchange="App.handleReportTypeChange()">
+                  <option value="daily">Daily Attendance Report</option>
+                  <option value="monthly">Monthly Attendance Report</option>
+                  <option value="dept">Department-wise Report</option>
+                  <option value="late">Late Arrival Report</option>
+                  <option value="duty">Class Duty Teaching Report</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label">Month / Date</label>
+                <input type="month" id="adminReportMonthInput" class="form-input" value="2026-11">
+              </div>
+            </div>
+
+            <!-- Canvas Analytics Chart -->
+            <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:16px; text-align:center;">
+              <h4 style="font-size:13px; font-weight:800; color:#B91C1C; margin-bottom:8px;">Attendance Trend Chart</h4>
+              <canvas id="adminAnalyticsCanvas" width="600" height="200" style="max-width:100%; height:auto;"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 6: ACADEMICS & DEPARTMENTS -->
+        <div id="adminTabAcademics" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">🏛️ 14 Official Academic Departments & 42 Classes</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Dept ID</th>
+                    <th>Department Name</th>
+                    <th>Code</th>
+                    <th>Classes Active</th>
+                  </tr>
+                </thead>
+                <tbody id="adminAcademicsClassBody">
+                  <tr><td colspan="4">Loading official departments...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 7: INSTITUTION SETTINGS -->
         <div id="adminTabSettings" style="display:none;">
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">⚙️ Institutional KCAS Campus Geofence & Policies</h3>
+              <h3 class="card-title">⚙️ Campus Geofence & System Settings</h3>
             </div>
             <form id="adminSettingsForm" onsubmit="App.handleSaveSettings(event)">
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
@@ -555,8 +898,8 @@
 
                 <div class="form-group">
                   <label class="form-label" for="settingCampusRadius">Campus Boundary Radius (Meters)</label>
-                  <input type="number" id="settingCampusRadius" class="form-input" min="50" max="2000" value="350" required>
-                  <span class="form-hint">Enforces Staff/HOD physical presence inside campus</span>
+                  <input type="number" id="settingCampusRadius" class="form-input" min="50" max="1000" value="100" required>
+                  <span class="form-hint">Strict 100-meter radius requirement</span>
                 </div>
               </div>
 
@@ -567,12 +910,41 @@
           </div>
         </div>
 
-        <!-- ADMIN SUB-TAB 6: AUDIT LOGS -->
+        <!-- ADMIN SUB-TAB 8: BROADCAST NOTIFICATIONS -->
+        <div id="adminTabBroadcast" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📢 Broadcast College Announcements</h3>
+            </div>
+            <form id="adminBroadcastForm" onsubmit="App.handleSendBroadcast(event)">
+              <div class="form-group">
+                <label class="form-label" for="broadcastTitleInput">Announcement Title</label>
+                <input type="text" id="broadcastTitleInput" class="form-input" placeholder="e.g. Faculty Meeting at 03:30 PM" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="broadcastMessageInput">Message</label>
+                <textarea id="broadcastMessageInput" class="form-textarea" rows="3" placeholder="Enter message for faculty and HODs..." required></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="broadcastTargetSelect">Recipient Role</label>
+                <select id="broadcastTargetSelect" class="form-select">
+                  <option value="all">All Faculty & HODs</option>
+                  <option value="hod">HODs Only</option>
+                  <option value="staff">Staff Only</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary btn-lg">
+                <span>Send Broadcast Notification</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ADMIN SUB-TAB 9: AUDIT LOGS -->
         <div id="adminTabAudit" style="display:none;">
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">📜 Immutable System Audit Logs</h3>
-              <p style="font-size:12px; color:#64748B;">Tracks staff check-ins, period duty logs, faculty additions/removals, and administrative actions.</p>
+              <h3 class="card-title">📜 Immutable System Activity Audit Logs</h3>
             </div>
             <div class="table-container">
               <table class="data-table">
@@ -581,7 +953,7 @@
                     <th>Timestamp</th>
                     <th>User</th>
                     <th>Action</th>
-                    <th>Target Entity</th>
+                    <th>Target</th>
                     <th>Details</th>
                     <th>IP Address</th>
                   </tr>
@@ -598,82 +970,341 @@
 
     </div>
 
+    <!-- ============================================================ -->
+    <!-- VIEW 5: MORE & SETTINGS SECTION (10 Structured Sections)      -->
+    <!-- ============================================================ -->
+    <div id="moreSettingsView" style="display:none;">
+      
+      <!-- Profile Header Summary Card -->
+      <div class="card" style="background: linear-gradient(135deg, #FFFFFF 60%, #FEF2F2 100%); margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <img id="settingsProfilePhoto" src="/icons/college-logo.png" style="width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid #B91C1C; background:#fff;" alt="Profile Photo">
+          <div style="flex:1;">
+            <strong id="settingsProfileName" style="font-size:16px; color:#0F172A; display:block;">Faculty Member</strong>
+            <span id="settingsProfileDesig" style="font-size:12px; color:#64748B;">Assistant Professor</span>
+            <span id="settingsProfileDept" style="font-size:11px; color:#B91C1C; font-weight:700; display:block;">Department of Computer Science</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10 Structured Settings Options -->
+      <div class="settings-container">
+        
+        <!-- 1. My Profile -->
+        <div class="settings-item" onclick="App.openProfileModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">👤</div>
+            <div>
+              <span class="settings-title">1. My Profile</span>
+              <span class="settings-desc">View details, department, and change login password</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 2. Notifications -->
+        <div class="settings-item" onclick="App.openNotificationsModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">🔔</div>
+            <div>
+              <span class="settings-title">2. Notifications Center</span>
+              <span class="settings-desc">View attendance reminders, duty alerts, and announcements</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 3. About Us -->
+        <div class="settings-item" onclick="App.openAboutUsModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">🏛️</div>
+            <div>
+              <span class="settings-title">3. About Us</span>
+              <span class="settings-desc">Krishna College of Arts and Science • Palayam Road, Karur</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 4. Share App -->
+        <div class="settings-item" onclick="App.triggerShareApp()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">📤</div>
+            <div>
+              <span class="settings-title">4. Share App</span>
+              <span class="settings-desc">Share official KCAS Attendance APK link via WhatsApp</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 5. Rate App -->
+        <div class="settings-item" onclick="App.openRateAppModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">⭐</div>
+            <div>
+              <span class="settings-title">5. Rate App</span>
+              <span class="settings-desc">Provide feedback and ratings for the mobile application</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 6. App Information -->
+        <div class="settings-item" onclick="App.openAppInfoModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">ℹ️</div>
+            <div>
+              <span class="settings-title">6. App Information</span>
+              <span class="settings-desc">Version 1.1.0 • Developer details • Release notes</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 7. Privacy Policy -->
+        <div class="settings-item" onclick="App.openPrivacyPolicyModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">🔒</div>
+            <div>
+              <span class="settings-title">7. Privacy Policy</span>
+              <span class="settings-desc">How camera selfies, GPS, and attendance data are protected</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 8. Terms & Conditions -->
+        <div class="settings-item" onclick="App.openTermsModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">📑</div>
+            <div>
+              <span class="settings-title">8. Terms & Conditions</span>
+              <span class="settings-desc">Official KCAS faculty attendance and biometric policies</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 9. Help & Support -->
+        <div class="settings-item" onclick="App.openHelpSupportModal()">
+          <div class="settings-item-left">
+            <div class="settings-icon-box">💬</div>
+            <div>
+              <span class="settings-title">9. Help & Support</span>
+              <span class="settings-desc">Contact KCAS IT Desk and Administrative Office</span>
+            </div>
+          </div>
+          <span class="settings-arrow">➔</span>
+        </div>
+
+        <!-- 10. Logout -->
+        <div class="settings-item" onclick="API.logout()" style="border-color:#FECDD3;">
+          <div class="settings-item-left">
+            <div class="settings-icon-box" style="background:#FEF2F2; color:#DC2626;">🚪</div>
+            <div>
+              <span class="settings-title" style="color:#DC2626;">10. Logout</span>
+              <span class="settings-desc">Sign out of this session securely</span>
+            </div>
+          </div>
+          <span class="settings-arrow" style="color:#DC2626;">➔</span>
+        </div>
+
+      </div>
+
+    </div>
+
   </main>
 
   <!-- ============================================================ -->
-  <!-- MODALS -->
+  <!-- MODALS                                                       -->
   <!-- ============================================================ -->
 
-  <!-- Modal: Student QR Scanner -->
-  <div id="scannerModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content">
+  <!-- Modal: Apply Leave (Staff) -->
+  <div id="applyLeaveModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📷 Scan Class Attendance QR</h3>
-        <button class="btn btn-light btn-sm" onclick="App.closeScannerModal()">✕ Close</button>
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">🏖️ Apply for Leave</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeApplyLeaveModal()">✕</button>
       </div>
+      <form id="applyLeaveForm" onsubmit="App.handleApplyLeave(event)">
+        <div class="form-group">
+          <label class="form-label" for="leaveTypeSelect">Leave Type</label>
+          <select id="leaveTypeSelect" class="form-select" required>
+            <option value="Casual Leave (CL)">Casual Leave (CL)</option>
+            <option value="Medical Leave (ML)">Medical Leave (ML)</option>
+            <option value="On Duty (OD)">On Duty (OD)</option>
+            <option value="Permission (PER)">Permission (PER)</option>
+            <option value="Loss of Pay (LOP)">Loss of Pay (LOP)</option>
+          </select>
+        </div>
 
-      <!-- Video Feed Container -->
-      <div class="scanner-video-box">
-        <video id="scannerVideo" playsinline></video>
-        <div class="scanner-crosshair"></div>
-      </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="leaveFromDate">From Date</label>
+            <input type="date" id="leaveFromDate" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="leaveToDate">To Date</label>
+            <input type="date" id="leaveToDate" class="form-input" required>
+          </div>
+        </div>
 
-      <!-- Scanner Controls & Mode Toggle -->
-      <div style="display:flex; gap:8px; margin-bottom:12px;">
-        <button id="startCamBtn" class="btn btn-outline btn-sm" style="flex:1;" onclick="App.startCameraScan()">
-          <span>📹 Open Camera</span>
+        <div class="form-group">
+          <label class="form-label" for="leaveReasonInput">Reason for Leave</label>
+          <textarea id="leaveReasonInput" class="form-textarea" rows="3" placeholder="Provide reason for leave application..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+          <span>Submit Leave Application</span>
         </button>
-        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="App.autoDetectActiveQR()">
-          <span>⚡ Auto-Scan Active Class</span>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Review Leave (HOD & Admin) -->
+  <div id="reviewLeaveModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:460px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">⚖️ Review Leave Application</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeReviewLeaveModal()">✕</button>
+      </div>
+      <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:10px; padding:12px; margin-bottom:14px; font-size:12px;">
+        <div style="margin-bottom:4px;"><strong id="reviewLeaveStaffName">-</strong> (<span id="reviewLeaveRoleDept">-</span>)</div>
+        <div style="margin-bottom:4px;"><strong>Type:</strong> <span id="reviewLeaveType">-</span></div>
+        <div style="margin-bottom:4px;"><strong>Dates:</strong> <span id="reviewLeaveDates">-</span></div>
+        <div><strong>Reason:</strong> <span id="reviewLeaveReason">-</span></div>
+      </div>
+      <form id="reviewLeaveForm" onsubmit="App.handleSubmitLeaveReview(event)">
+        <input type="hidden" id="reviewLeaveId">
+        <div class="form-group">
+          <label class="form-label" for="reviewLeaveStatusSelect">Decision</label>
+          <select id="reviewLeaveStatusSelect" class="form-select" required>
+            <option value="approved">Approve Leave</option>
+            <option value="rejected">Reject Leave</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reviewLeaveRemarks">Approval / Rejection Remarks</label>
+          <textarea id="reviewLeaveRemarks" class="form-textarea" rows="2" placeholder="e.g. Approved. Ensure classes are assigned to substitute faculty." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" style="width:100%;">
+          <span>Confirm Decision</span>
         </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Face Biometric & 100m Campus GPS Verification -->
+  <div id="faceAuthModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px; text-align:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="faceAuthModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📸 Biometric Face & GPS Verification</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeFaceAuthModal()">✕</button>
       </div>
 
-      <!-- Campus Location Simulator Toggle -->
-      <div style="background:#FEF2F2; border:1px solid #FECDD3; border-radius:8px; padding:10px; margin-bottom:14px; font-size:12px;">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="checkbox" id="scannerSimulateCampusCoords" checked>
-          <span><strong>Use KCAS Karur Campus GPS</strong> (Bypasses remote GPS for testing)</span>
-        </label>
+      <div id="faceAuthProfileReferenceCard" style="background:#FFF1F2; border:1px solid #FECDD3; border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px; text-align:left;">
+        <img id="faceAuthRefPhoto" src="/icons/college-logo.png" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid #B91C1C; background:#fff;" alt="Registered Photo">
+        <div style="flex:1;">
+          <div style="font-size:10px; font-weight:800; color:#B91C1C; text-transform:uppercase;">Enrolled Profile Photo</div>
+          <strong id="faceAuthRefName" style="font-size:13px; color:#0F172A; display:block;">Faculty Name</strong>
+          <span id="faceAuthRefDesig" style="font-size:11px; color:#64748B;">Staff ID / Role</span>
+        </div>
+        <div style="font-size:22px;">🛡️</div>
       </div>
 
-      <!-- Fallback Token Input -->
-      <div>
-        <label class="form-label" style="font-size:12px;" for="scannerManualToken">Or Paste / Test QR Token String:</label>
-        <input type="text" id="scannerManualToken" class="form-input" style="font-size:12px;" placeholder="Paste active class QR token here">
-        <button class="btn btn-outline btn-sm" style="width:100%; margin-top:8px;" onclick="App.submitManualQR()">
-          <span>Submit Token</span>
+      <p id="faceAuthModalDesc" style="font-size:12px; color:#64748B; margin-bottom:10px;">
+        Align your face in the oval guide. System verifies physical campus presence within 100 meters.
+      </p>
+
+      <div class="face-camera-container" id="faceCameraBox">
+        <video id="faceCameraVideo" class="face-camera-video" playsinline autoplay muted></video>
+        <canvas id="faceCaptureCanvas" style="display:none;"></canvas>
+        <div id="faceOvalGuide" class="face-oval-guide"></div>
+        <div id="faceScanLaserLine" class="face-scan-laser"></div>
+        <div id="faceGuideHint" class="face-guide-hint">Center Face in Oval & Look at Camera</div>
+      </div>
+
+      <div id="faceAuthProcessingBox" style="display:none; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; margin-bottom:12px;">
+        <div class="spinner" style="margin: 0 auto 10px;"></div>
+        <strong style="font-size:13px; color:#B91C1C; display:block;" id="faceProcessingText">Matching Live Selfie with Registered Profile...</strong>
+        <span style="font-size:11px; color:#64748B;" id="faceProcessingSubText">Checking KCAS campus GPS radius (100m)...</span>
+      </div>
+
+      <div id="faceCapturedPreviewBox" style="display:none; margin-bottom:12px;">
+        <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:10px;">
+          <div style="text-align:center;">
+            <img id="faceAuthSideProfileImg" src="" class="biometric-face-circle" alt="Profile">
+            <span style="font-size:10px; color:#64748B; display:block; margin-top:4px;">Enrolled Photo</span>
+          </div>
+          <div style="font-size:20px; color:#B91C1C; font-weight:800;">⟷</div>
+          <div style="text-align:center;">
+            <img id="faceCapturedImage" src="" class="biometric-face-circle" alt="Live Selfie">
+            <span style="font-size:10px; color:#64748B; display:block; margin-top:4px;">Live Selfie</span>
+          </div>
+        </div>
+
+        <div id="faceAuthMatchResult" style="border-radius:10px; padding:10px 14px; text-align:center;">
+          <!-- Dynamically inserted verification status -->
+        </div>
+
+        <div style="margin-top:8px; font-size:11px; color:#475569;">
+          <span id="faceAuthGpsStatus">Verifying KCAS Campus GPS (PIN: 621301)...</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button id="faceCaptureActionBtn" class="btn btn-primary" style="flex:1;" onclick="App.captureFaceSnapshot()">
+          <span>📸 Capture Live Selfie</span>
+        </button>
+        <button id="faceRetakeActionBtn" class="btn btn-light" style="display:none; flex:1;" onclick="App.retakeFaceSnapshot()">
+          <span>🔄 Retake</span>
+        </button>
+        <button id="faceConfirmActionBtn" class="btn btn-success" style="display:none; flex:1;" onclick="App.confirmAndSubmitFaceAuth()">
+          <span>✅ Confirm & Mark Attendance</span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Attendance Success Confirmation -->
-  <div id="successModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="text-align:center;">
-      <div style="width:64px; height:64px; background:#ECFDF5; color:#059669; border-radius:50%; font-size:32px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
-        ✓
+  <!-- Modal: Blackboard Photo Lightbox -->
+  <div id="photoPreviewModal" class="modal-overlay" style="display:none;" onclick="App.closePhotoModal()">
+    <div class="modal-photo-content" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="photoModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📸 Classroom / Blackboard Photo Proof</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closePhotoModal()">✕</button>
       </div>
-      <h3 style="font-size:18px; color:#065F46; font-weight:800;" id="successModalTitle">Attendance Recorded!</h3>
-      <p style="font-size:13px; color:#475569; margin:8px 0 16px;" id="successModalMsg">Your attendance was verified and recorded successfully.</p>
-      
-      <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:8px; padding:12px; margin-bottom:16px; text-align:left; font-size:13px;">
-        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-          <span style="color:#64748B;">Subject:</span>
-          <strong id="successModalSubject">-</strong>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-          <span style="color:#64748B;">Recorded At:</span>
-          <strong id="successModalTime">-</strong>
-        </div>
-        <div style="display:flex; justify-content:space-between;">
-          <span style="color:#64748B;">Status:</span>
-          <span class="status-badge status-present" id="successModalStatus">PRESENT</span>
-        </div>
-      </div>
+      <img id="photoModalImg" class="photo-modal-img" src="" alt="Full Blackboard Photo Proof">
+      <div id="photoModalMeta" style="margin-top:10px; font-size:12px; color:#475569; background:#FEF2F2; border:1px solid #FECDD3; padding:8px 12px; border-radius:8px;"></div>
+    </div>
+  </div>
 
-      <button class="btn btn-primary btn-lg" onclick="App.closeSuccessModal()">
-        <span>Continue to Summary</span>
-      </button>
+  <!-- Modal: Date Attendance Drilldown (Calendar Click) -->
+  <div id="dateDetailModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:16px; color:#B91C1C; font-weight:800;" id="dateDetailTitle">Attendance Details</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeDateDetailModal()">✕</button>
+      </div>
+      <div id="dateDetailContent" style="font-size:13px;">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Notifications Drawer -->
+  <div id="notificationsModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:480px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">🔔 Notifications & Announcements</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeNotificationsModal()">✕</button>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+        <button class="btn btn-outline btn-sm" onclick="App.markAllNotificationsRead()">Mark all as read</button>
+      </div>
+      <div id="notificationsListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow-y:auto;">
+        <div style="text-align:center; padding:16px; color:#64748B;">No notifications available.</div>
+      </div>
     </div>
   </div>
 
@@ -685,7 +1316,13 @@
         <button class="btn btn-light btn-sm" onclick="App.closeCreateUserModal()">✕</button>
       </div>
       <form id="createUserForm" onsubmit="App.handleCreateUser(event)">
-        <input type="hidden" id="newRole" value="staff">
+        <div class="form-group">
+          <label class="form-label" for="newUserRole">Account Role</label>
+          <select id="newUserRole" class="form-select" onchange="App.handleNewUserRoleChange()">
+            <option value="staff" selected>Faculty Staff</option>
+            <option value="hod">Head of Department (HOD)</option>
+          </select>
+        </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
@@ -711,27 +1348,21 @@
           </div>
         </div>
 
-        <!-- Faculty Specific Fields: Designation & Department -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;" id="newUserStaffFields">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
-            <label class="form-label" for="newDesignation">Designation / Role</label>
+            <label class="form-label" for="newDesignation">Designation</label>
             <select id="newDesignation" class="form-select">
-              <option value="Head of Department (HOD)">Head of Department (HOD)</option>
               <option value="Assistant Professor" selected>Assistant Professor</option>
               <option value="Associate Professor">Associate Professor</option>
+              <option value="Head of Department (HOD)">Head of Department (HOD)</option>
               <option value="Professor">Professor</option>
-              <option value="Senior Lecturer">Senior Lecturer</option>
             </select>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="newUserDept">Department</label>
             <select id="newUserDept" class="form-select">
-              <option value="1">Computer Science</option>
-              <option value="2">Computer Applications</option>
-              <option value="3">Commerce</option>
-              <option value="4">Mathematics</option>
-              <option value="5">English Literature</option>
+              <!-- Dynamically populated with 14 departments -->
             </select>
           </div>
         </div>
@@ -742,8 +1373,8 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="newAddress">Residential Address</label>
-          <textarea id="newAddress" class="form-textarea" rows="2" placeholder="Door No, Street, Town/Village, District, PIN"></textarea>
+          <label class="form-label" for="newAddress">Address</label>
+          <textarea id="newAddress" class="form-textarea" rows="2" placeholder="Door No, Street, Town, District"></textarea>
         </div>
 
         <div class="form-group">
@@ -754,157 +1385,176 @@
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:8px;">
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:8px; width:100%;">
           <span>Register Faculty Account</span>
         </button>
       </form>
     </div>
   </div>
 
-  <!-- Modal: Blackboard / Classroom Photo Lightbox Modal -->
-  <div id="photoPreviewModal" class="modal-overlay" style="display:none;" onclick="App.closePhotoModal()">
-    <div class="modal-photo-content" onclick="event.stopPropagation()">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 id="photoModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📷 Classroom / Blackboard Photo Proof</h3>
-        <button class="btn btn-light btn-sm" onclick="App.closePhotoModal()">✕ Close</button>
-      </div>
-      <img id="photoModalImg" class="photo-modal-img" src="" alt="Full Classroom Blackboard Photo Proof">
-      <div id="photoModalMeta" style="margin-top:10px; font-size:12px; color:#475569; background:#FEF2F2; border:1px solid #FECDD3; padding:8px 12px; border-radius:8px;"></div>
-    </div>
-  </div>
-
-  <!-- Modal: Biometric Face Authentication & Campus GPS Verification (For Staff & HOD Check-In / Check-Out) -->
-  <div id="faceAuthModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:440px; text-align:center;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 id="faceAuthModalTitle" style="font-size:16px; color:#B91C1C; font-weight:800;">📷 Face Biometric Authentication</h3>
-        <button class="btn btn-light btn-sm" onclick="App.closeFaceAuthModal()">✕</button>
-      </div>
-
-      <!-- Staff Registered Profile Reference Badge -->
-      <div id="faceAuthProfileReferenceCard" style="background:#FFF1F2; border:1px solid #FECDD3; border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px; text-align:left;">
-        <img id="faceAuthRefPhoto" src="/icons/college-logo.png" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid #B91C1C; background:#fff;" alt="Registered Photo">
-        <div style="flex:1;">
-          <div style="font-size:10px; font-weight:800; color:#B91C1C; text-transform:uppercase;">Enrolled Profile Photo</div>
-          <strong id="faceAuthRefName" style="font-size:13px; color:#0F172A; display:block;">Faculty Name</strong>
-          <span id="faceAuthRefDesig" style="font-size:11px; color:#64748B;">Staff ID / Role</span>
-        </div>
-        <div style="font-size:22px;">🛡️</div>
-      </div>
-
-      <p id="faceAuthModalDesc" style="font-size:12px; color:#64748B; margin-bottom:10px;">
-        Face authentication will verify your live camera selfie against your enrolled profile photo.
-      </p>
-
-      <!-- Video Stream / Canvas Box with Laser Scanner -->
-      <div class="face-camera-container" id="faceCameraBox">
-        <video id="faceCameraVideo" class="face-camera-video" playsinline autoplay muted></video>
-        <canvas id="faceCaptureCanvas" style="display:none;"></canvas>
-        <div id="faceOvalGuide" class="face-oval-guide"></div>
-        <div id="faceScanLaserLine" class="face-scan-laser"></div>
-        <div id="faceGuideHint" class="face-guide-hint">Center Face in Oval & Look at Camera</div>
-      </div>
-
-      <!-- Comparing & Biometric Verification Result Display -->
-      <div id="faceAuthProcessingBox" style="display:none; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:14px; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; justify-content:center; gap:10px; color:#B91C1C; font-weight:700; font-size:13px;">
-          <span class="face-scanning-spinner"></span>
-          <span>Comparing Live Face with Profile Photo...</span>
-        </div>
-      </div>
-
-      <!-- Side-by-Side Face Comparison Preview & Match Badge -->
-      <div id="faceCapturedPreviewBox" style="display:none; margin-bottom:12px;">
-        <div class="biometric-compare-box">
-          <div style="text-align:center;">
-            <img id="faceAuthSideProfileImg" src="" class="biometric-face-circle" alt="Profile">
-            <span style="font-size:10px; color:#64748B; display:block; font-weight:700; margin-top:4px;">Profile Photo</span>
-          </div>
-          <div style="font-size:20px; color:#10B981; font-weight:900;">➔</div>
-          <div style="text-align:center;">
-            <img id="faceCapturedImage" src="" class="biometric-face-circle" alt="Live Selfie">
-            <span style="font-size:10px; color:#059669; display:block; font-weight:700; margin-top:4px;">Live Selfie</span>
-          </div>
-        </div>
-
-        <div id="faceAuthMatchResult" style="border-radius:10px; padding:10px 14px; text-align:center;">
-          <!-- Injected dynamically: Match or Mismatch -->
-        </div>
-      </div>
-
-      <!-- Campus GPS Status Indicator -->
-      <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:10px; margin-bottom:14px; font-size:12px; text-align:left;">
-        <div style="display:flex; align-items:center; gap:6px; color:#065F46; font-weight:700;">
-          <span>📍</span>
-          <span id="faceAuthGpsStatus">Verifying KCAS Campus GPS (PIN: 621301)...</span>
-        </div>
-        <div style="font-size:11px; color:#047857; margin-top:2px;">KCAS Palayam Road, Karur • Boundary radius: 350m</div>
-      </div>
-
-      <!-- Action Buttons -->
-      <div style="display:flex; gap:8px;">
-        <button id="faceCaptureActionBtn" class="btn btn-primary" style="flex:1;" onclick="App.captureFaceSnapshot()">
-          <span>📸 Scan & Verify Face</span>
-        </button>
-        <button id="faceRetakeActionBtn" class="btn btn-light" style="display:none; flex:1;" onclick="App.retakeFaceSnapshot()">
-          <span>🔄 Retake</span>
-        </button>
-        <button id="faceConfirmActionBtn" class="btn btn-success" style="display:none; flex:1;" onclick="App.confirmAndSubmitFaceAuth()">
-          <span>✓ Confirm & Mark Attendance (OK)</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal: Finalize Period Session & Lesson Photo Proof (Staff) -->
-  <div id="finalizeSessionModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content" style="max-width:480px;">
+  <!-- Modal: Change Password (Profile) -->
+  <div id="changePasswordModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:400px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="font-size:16px; color:#B91C1C; font-weight:800;">📸 End Session & Upload Lesson Photo</h3>
-        <button class="btn btn-light btn-sm" onclick="App.closeFinalizeSessionModal()">✕</button>
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">🔑 Change Login Password</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeChangePasswordModal()">✕</button>
       </div>
-      
-      <p style="font-size:12px; color:#64748B; margin-bottom:14px;">
-        Record the topic covered and provide classroom / blackboard photo proof before concluding this class period.
-      </p>
-
-      <form id="finalizeSessionForm" onsubmit="App.handleFinalizeSessionSubmit(event)">
+      <form id="changePasswordForm" onsubmit="App.handleChangePasswordSubmit(event)">
         <div class="form-group">
-          <label class="form-label" for="finalLessonTopic">Lesson Topic Covered</label>
-          <input type="text" id="finalLessonTopic" class="form-input" placeholder="e.g. Unit 3 - Normalization & 3NF" required>
+          <label class="form-label" for="oldPasswordInput">Current Password</label>
+          <input type="password" id="oldPasswordInput" class="form-input" required autocomplete="current-password">
         </div>
-
         <div class="form-group">
-          <label class="form-label" for="finalLessonSummary">Lesson Summary / Classroom Notes</label>
-          <textarea id="finalLessonSummary" class="form-textarea" rows="2" placeholder="Key topics explained, student questions, problems solved..."></textarea>
+          <label class="form-label" for="newPasswordInput">New Password</label>
+          <input type="password" id="newPasswordInput" class="form-input" required autocomplete="new-password">
         </div>
-
         <div class="form-group">
-          <label class="form-label">Classroom / Blackboard Photo Proof</label>
-          <input type="file" id="finalLessonPhotoInput" accept="image/*" class="form-input" onchange="App.handleLessonPhotoSelect(event)">
-          <div style="margin-top:6px; display:flex; gap:8px;">
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.snapLessonPhotoFromCamera()">
-              <span>📷 Snap from Camera</span>
-            </button>
-          </div>
-          <img id="finalLessonPhotoPreview" class="lesson-photo-preview" src="" alt="Lesson Photo" style="display:none;">
+          <label class="form-label" for="confirmPasswordInput">Confirm New Password</label>
+          <input type="password" id="confirmPasswordInput" class="form-input" required autocomplete="new-password">
         </div>
-
-        <button type="submit" class="btn btn-danger btn-lg" style="margin-top:10px;">
-          <span>✓ Finalize Period Session</span>
+        <button type="submit" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+          <span>Update Password</span>
         </button>
       </form>
     </div>
   </div>
 
+  <!-- Modal: About Us -->
+  <div id="aboutUsModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:480px; text-align:center;">
+      <img src="/icons/college-logo.png" style="width:72px; height:72px; margin:0 auto 12px; display:block;" alt="Logo">
+      <h3 style="font-size:18px; color:#B91C1C; font-weight:800;">Krishna College of Arts and Science</h3>
+      <p style="font-size:12px; color:#475569; margin:4px 0 14px;">Approved by Govt. of Tamil Nadu & Affiliated to Bharathidasan University</p>
+      
+      <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:10px; padding:12px; text-align:left; font-size:12px; margin-bottom:16px;">
+        <p style="margin-bottom:6px;"><strong>📍 College Campus Address:</strong><br>Palayam Road, Karur, Tamil Nadu – 621301</p>
+        <p style="margin-bottom:6px;"><strong>📞 Contact Number:</strong> +91 4324 290123 / +91 94433 12345</p>
+        <p style="margin-bottom:6px;"><strong>✉️ Email Address:</strong> info@kcas.edu.in / principal@kcas.edu.in</p>
+        <p><strong>🌐 Official Website:</strong> <a href="https://krishnacollege.ac.in" target="_blank" style="color:#B91C1C;">https://krishnacollege.ac.in</a></p>
+      </div>
+
+      <p style="font-size:11px; color:#64748B; margin-bottom:14px;">
+        The KCAS Faculty Attendance System empowers academic operations with GPS campus restriction, biometric face matching, daily period duty logs, and leave management.
+      </p>
+
+      <button class="btn btn-primary" onclick="App.closeAboutUsModal()" style="width:100%;">Close</button>
+    </div>
+  </div>
+
+  <!-- Modal: App Information -->
+  <div id="appInfoModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📱 App Information</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeAppInfoModal()">✕</button>
+      </div>
+      <div style="font-size:13px; color:#0F172A; display:flex; flex-direction:column; gap:8px;">
+        <div><strong>Application Name:</strong> KCAS Attendance</div>
+        <div><strong>Current Version:</strong> 1.1.0 (Release Build 3)</div>
+        <div><strong>Developer:</strong> Google DeepMind & KCAS IT Cell</div>
+        <div><strong>Last Updated:</strong> November 27, 2026</div>
+        <div><strong>Release Notes (v1.1.0):</strong>
+          <ul style="padding-left:18px; margin-top:4px; font-size:12px; color:#475569;">
+            <li>Dedicated HOD Dashboard with department isolation.</li>
+            <li>Master Admin 8-metric dashboard & 10 quick actions.</li>
+            <li>Interactive color-coded monthly attendance calendar.</li>
+            <li>Comprehensive Staff Leave Management (CL, ML, OD, PER).</li>
+            <li>100-meter GPS Campus Restriction + Biometric Face Auth.</li>
+            <li>Class Period Duty Submission with Blackboard photo proof.</li>
+            <li>14 official departments & 42 class degrees.</li>
+          </ul>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="App.closeAppInfoModal()" style="width:100%; margin-top:14px;">Close</button>
+    </div>
+  </div>
+
+  <!-- Modal: Privacy Policy -->
+  <div id="privacyPolicyModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:500px; max-height:80vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">🔒 Privacy Policy</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closePrivacyPolicyModal()">✕</button>
+      </div>
+      <div style="font-size:12px; color:#475569; line-height:1.6;">
+        <p style="margin-bottom:8px;"><strong>1. Data Collection:</strong> KCAS Attendance collects faculty name, staff ID, department, registered profile photographs, and live selfie captures exclusively for institutional attendance verification.</p>
+        <p style="margin-bottom:8px;"><strong>2. Location Services:</strong> GPS coordinates are captured at check-in/out to verify presence within the college 100-meter campus radius. Real-time background tracking is never performed.</p>
+        <p style="margin-bottom:8px;"><strong>3. Biometric Verification:</strong> Facial features are compared client-side and verified against your administrative profile photo. Biometric data is never shared with third parties.</p>
+        <p style="margin-bottom:8px;"><strong>4. Teaching Records:</strong> Blackboard photographs and teaching notes are archived securely for academic accreditation and duty auditing.</p>
+        <p><strong>5. Retention & Security:</strong> Passwords and sessions use cryptographically secured hashing and token authentication.</p>
+      </div>
+      <button class="btn btn-primary" onclick="App.closePrivacyPolicyModal()" style="width:100%; margin-top:14px;">I Understand</button>
+    </div>
+  </div>
+
+  <!-- Modal: Terms & Conditions -->
+  <div id="termsModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:500px; max-height:80vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📑 Terms & Conditions</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeTermsModal()">✕</button>
+      </div>
+      <div style="font-size:12px; color:#475569; line-height:1.6;">
+        <p style="margin-bottom:8px;"><strong>1. Institutional Use:</strong> This application is the official property of Krishna College of Arts and Science, Karur. Access is restricted to authorized faculty staff, HODs, and administrators.</p>
+        <p style="margin-bottom:8px;"><strong>2. Attendance Integrity:</strong> Staff must physically mark attendance on campus. Any attempt to spoof GPS location or use unauthorized photographs constitutes academic misconduct.</p>
+        <p style="margin-bottom:8px;"><strong>3. Class Duty Compliance:</strong> Faculty members are expected to record lesson topics and photo proofs for all designated class periods daily.</p>
+        <p><strong>4. Leave Protocol:</strong> Leaves must be submitted in advance and are subject to approval by the respective Head of Department or Principal.</p>
+      </div>
+      <button class="btn btn-primary" onclick="App.closeTermsModal()" style="width:100%; margin-top:14px;">Accept</button>
+    </div>
+  </div>
+
+  <!-- Modal: Help & Support -->
+  <div id="helpSupportModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">💬 Help & Support</h3>
+        <button class="btn btn-light btn-sm" onclick="App.closeHelpSupportModal()">✕</button>
+      </div>
+      <div style="font-size:13px; color:#0F172A; line-height:1.6;">
+        <p style="margin-bottom:10px;">For technical assistance with the KCAS Attendance app, contact the IT cell or Administration Office:</p>
+        <div style="background:#FAF9F9; border:1px solid #E2E8F0; border-radius:10px; padding:12px; margin-bottom:12px; font-size:12px;">
+          <div><strong>📞 Support Hotline:</strong> +91 4324 290125</div>
+          <div style="margin-top:4px;"><strong>✉️ Technical Email:</strong> support@kcas.edu.in</div>
+          <div style="margin-top:4px;"><strong>🏢 Location:</strong> Computer Science Block, Room 102</div>
+          <div style="margin-top:4px;"><strong>⏰ Office Hours:</strong> 09:00 AM – 05:00 PM (Mon–Sat)</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="App.closeHelpSupportModal()" style="width:100%;">Close</button>
+    </div>
+  </div>
+
+  <!-- Modal: Rate App -->
+  <div id="rateAppModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width:400px; text-align:center;">
+      <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">⭐ Rate KCAS Attendance App</h3>
+      <p style="font-size:12px; color:#64748B; margin:4px 0 10px;">Tap a star to rate your application experience:</p>
+      
+      <div class="star-rating" id="starRatingBox">
+        <span onclick="App.setAppRating(1)">★</span>
+        <span onclick="App.setAppRating(2)">★</span>
+        <span onclick="App.setAppRating(3)">★</span>
+        <span onclick="App.setAppRating(4)">★</span>
+        <span onclick="App.setAppRating(5)">★</span>
+      </div>
+
+      <textarea id="rateAppComment" class="form-textarea" rows="3" placeholder="Tell us your feedback or feature suggestions..."></textarea>
+      
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-light" style="flex:1;" onclick="App.closeRateAppModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="App.submitAppRating()">Submit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Bulk CSV Import (Admin) -->
   <div id="csvImportModal" class="modal-overlay" style="display:none;">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:500px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📁 Bulk CSV User Import</h3>
+        <h3 style="font-size:17px; color:#B91C1C; font-weight:800;">📋 Bulk CSV User Import</h3>
         <button class="btn btn-light btn-sm" onclick="App.closeCsvImportModal()">✕</button>
       </div>
-      <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Paste comma-separated CSV text or choose a CSV file. Supported headers: <code>username,full_name,email,role,class_name,password</code></p>
+      <p style="font-size:12px; color:#64748B; margin-bottom:12px;">Supported headers: <code>username,full_name,email,role,password</code></p>
       
       <div class="form-group">
         <label class="form-label" for="csvFileInput">Upload CSV File</label>
@@ -913,12 +1563,11 @@
 
       <div class="form-group">
         <label class="form-label" for="csvTextInput">Or Paste CSV Data Directly</label>
-        <textarea id="csvTextInput" class="form-textarea" rows="6" placeholder="username,full_name,email,role,password
-kcas24cs111,S. Suresh,suresh@kcas.edu.in,student,kcas123
-kcas24cs112,M. Monisha,monisha@kcas.edu.in,student,kcas123"></textarea>
+        <textarea id="csvTextInput" class="form-textarea" rows="5" placeholder="username,full_name,email,role,password
+kcas_cs_staff2,Dr. M. Mohan,mohan@kcas.edu.in,staff,kcas123"></textarea>
       </div>
 
-      <button class="btn btn-primary btn-lg" onclick="App.submitCsvImport()">
+      <button class="btn btn-primary btn-lg" onclick="App.submitCsvImport()" style="width:100%;">
         <span>Process & Import Users</span>
       </button>
     </div>
@@ -929,7 +1578,7 @@ kcas24cs112,M. Monisha,monisha@kcas.edu.in,student,kcas123"></textarea>
 
   <!-- Mobile Bottom Navigation (Visible on phones) -->
   <nav class="mobile-nav" id="mobileBottomNav" style="display:none;">
-    <!-- Populated dynamically based on user role -->
+    <!-- Injected dynamically per user role -->
   </nav>
 
   <!-- Scripts -->

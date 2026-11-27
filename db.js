@@ -238,19 +238,115 @@ function initSchema() {
 // Automatic migrations for existing databases
 function runMigrations() {
   try {
+    // 1. Create essential management tables
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS leave_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        staff_id INTEGER NOT NULL,
+        leave_type TEXT NOT NULL CHECK(leave_type IN ('casual', 'medical', 'on_duty', 'permission', 'loss_of_pay')),
+        from_date TEXT NOT NULL,
+        to_date TEXT NOT NULL,
+        total_days REAL DEFAULT 1,
+        reason TEXT NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+        reviewed_by INTEGER,
+        reviewed_by_name TEXT,
+        reviewed_at TEXT,
+        remarks TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS leave_balances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        staff_id INTEGER NOT NULL,
+        academic_year TEXT NOT NULL DEFAULT '2026-2027',
+        casual_leave REAL DEFAULT 12,
+        medical_leave REAL DEFAULT 10,
+        on_duty REAL DEFAULT 15,
+        permissions REAL DEFAULT 6,
+        used_casual REAL DEFAULT 0,
+        used_medical REAL DEFAULT 0,
+        used_on_duty REAL DEFAULT 0,
+        used_permissions REAL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(staff_id, academic_year)
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        target_role TEXT DEFAULT 'all',
+        department_id INTEGER,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT DEFAULT 'info',
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    // 2. Ensure users table allows 'hod' role
+    try {
+      db.prepare("INSERT INTO users (username, password_hash, salt, role, full_name) VALUES ('__temp_hod_probe__', 'h', 's', 'hod', 'Probe')").run();
+      db.prepare("DELETE FROM users WHERE username = '__temp_hod_probe__'").run();
+    } catch (e) {
+      db.exec('PRAGMA foreign_keys = OFF;');
+      db.exec(`
+        CREATE TABLE users_migrated (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          salt TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('admin', 'hod', 'staff', 'student')),
+          full_name TEXT NOT NULL,
+          email TEXT,
+          phone TEXT,
+          parent_phone TEXT,
+          address TEXT,
+          photo_url TEXT,
+          department_id INTEGER,
+          class_id INTEGER,
+          register_number TEXT,
+          designation TEXT,
+          is_active INTEGER DEFAULT 1,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
+          FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
+        );
+
+        INSERT INTO users_migrated (id, username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active, created_at)
+        SELECT id, username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active, created_at
+        FROM users;
+
+        DROP TABLE users;
+        ALTER TABLE users_migrated RENAME TO users;
+      `);
+      db.exec('PRAGMA foreign_keys = ON;');
+    }
+
+    // 3. User column migrations
     const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
     if (!userCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
     if (!userCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
     if (!userCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
 
+    // 4. Staff attendance column migrations
     const staffCols = db.prepare("PRAGMA table_info(staff_attendance)").all().map(c => c.name);
     if (!staffCols.includes('check_in_photo')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_photo TEXT;");
     if (!staffCols.includes('check_in_lat')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_lat REAL;");
     if (!staffCols.includes('check_in_lng')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_lng REAL;");
+    if (!staffCols.includes('check_in_gps_verified')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_gps_verified INTEGER DEFAULT 0;");
+    if (!staffCols.includes('check_in_face_verified')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_in_face_verified INTEGER DEFAULT 0;");
     if (!staffCols.includes('check_out_photo')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_photo TEXT;");
     if (!staffCols.includes('check_out_lat')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_lat REAL;");
     if (!staffCols.includes('check_out_lng')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_lng REAL;");
+    if (!staffCols.includes('check_out_gps_verified')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_gps_verified INTEGER DEFAULT 0;");
+    if (!staffCols.includes('check_out_face_verified')) db.exec("ALTER TABLE staff_attendance ADD COLUMN check_out_face_verified INTEGER DEFAULT 0;");
 
+    // 5. Duty session column migrations
     const sessCols = db.prepare("PRAGMA table_info(attendance_sessions)").all().map(c => c.name);
     if (!sessCols.includes('department_id')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN department_id INTEGER;");
     if (!sessCols.includes('period_number')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN period_number INTEGER DEFAULT 1;");
@@ -258,9 +354,14 @@ function runMigrations() {
     if (!sessCols.includes('lesson_summary')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_summary TEXT;");
     if (!sessCols.includes('lesson_photo')) db.exec("ALTER TABLE attendance_sessions ADD COLUMN lesson_photo TEXT;");
 
-    // Enforce official updated pincode 621301 and system controls
+    // 6. Strict College Campus Geofence Settings (100-meter radius, Palayam Road Karur)
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('college_name', 'Krishna College of Arts and Science (KCAS)', 'Official college name')").run();
     db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('college_address', 'Palayam Road, Karur, Tamil Nadu 621301', 'Campus location address')").run();
     db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('college_pincode', '621301', 'Campus postal pincode')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('campus_latitude', '10.9234', 'KCAS campus latitude')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('campus_longitude', '78.0772', 'KCAS campus longitude')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('campus_radius_meters', '100', 'Strict campus geofence boundary radius (100 meters)')").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, description) VALUES ('app_version', '1.1.0', 'Current production application release version')").run();
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('student_qr_enabled', '0', 'Admin control: Student QR attendance toggle (1=ON, 0=OFF)')").run();
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('morning_checkin_start', '08:00', 'Morning check-in start time')").run();
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('morning_checkin_end', '10:00', 'Morning check-in cutoff time')").run();
@@ -578,27 +679,32 @@ function ensureDummyStaffAndHod() {
 
     // 1. Single HOD Account
     const hodAuth = hashPassword('KcasHod2026');
+    let hodId;
     const existingHod = db.prepare("SELECT id FROM users WHERE username = 'hod_cs'").get();
     if (existingHod) {
+      hodId = existingHod.id;
       db.prepare(`
         UPDATE users 
-        SET password_hash = ?, salt = ?, role = 'staff', is_active = 1,
+        SET password_hash = ?, salt = ?, role = 'hod', is_active = 1,
             full_name = 'Dr. K. Ramesh (HOD - Computer Science)',
             email = 'hod.cs@kcas.edu.in', phone = '9842411002',
             department_id = ?, designation = 'Associate Professor & HOD'
         WHERE id = ?
-      `).run(hodAuth.hash, hodAuth.salt, deptId, existingHod.id);
+      `).run(hodAuth.hash, hodAuth.salt, deptId, hodId);
     } else {
-      db.prepare(`
+      const hIns = db.prepare(`
         INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
-        VALUES ('hod_cs', ?, ?, 'staff', 'Dr. K. Ramesh (HOD - Computer Science)', 'hod.cs@kcas.edu.in', '9842411002', ?, 'Associate Professor & HOD', 1)
+        VALUES ('hod_cs', ?, ?, 'hod', 'Dr. K. Ramesh (HOD - Computer Science)', 'hod.cs@kcas.edu.in', '9842411002', ?, 'Associate Professor & HOD', 1)
       `).run(hodAuth.hash, hodAuth.salt, deptId);
+      hodId = Number(hIns.lastInsertRowid);
     }
 
     // 2. Single Staff Account
     const staffAuth = hashPassword('KcasStaff2026');
+    let staffId;
     const existingStaff = db.prepare("SELECT id FROM users WHERE username = 'staff_cs'").get();
     if (existingStaff) {
+      staffId = existingStaff.id;
       db.prepare(`
         UPDATE users 
         SET password_hash = ?, salt = ?, role = 'staff', is_active = 1,
@@ -606,15 +712,24 @@ function ensureDummyStaffAndHod() {
             email = 'staff.cs@kcas.edu.in', phone = '9842411003',
             department_id = ?, designation = 'Assistant Professor'
         WHERE id = ?
-      `).run(staffAuth.hash, staffAuth.salt, deptId, existingStaff.id);
+      `).run(staffAuth.hash, staffAuth.salt, deptId, staffId);
     } else {
-      db.prepare(`
+      const sIns = db.prepare(`
         INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
         VALUES ('staff_cs', ?, ?, 'staff', 'Prof. S. Priya (Assistant Professor)', 'staff.cs@kcas.edu.in', '9842411003', ?, 'Assistant Professor', 1)
       `).run(staffAuth.hash, staffAuth.salt, deptId);
+      staffId = Number(sIns.lastInsertRowid);
     }
 
-    console.log('Successfully created/verified 1 HOD (hod_cs) and 1 Staff (staff_cs)!');
+    // Initialize default leave balances
+    const insertBal = db.prepare(`
+      INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
+      VALUES (?, '2026-2027', 12, 10, 15, 6)
+    `);
+    if (hodId) insertBal.run(hodId);
+    if (staffId) insertBal.run(staffId);
+
+    console.log('Successfully created/verified 1 HOD (hod_cs) and 1 Staff (staff_cs) with active leave balances!');
   } catch (err) {
     console.error('Error in ensureDummyStaffAndHod:', err);
   }

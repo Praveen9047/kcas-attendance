@@ -335,12 +335,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // -----------------------------------------------------------
-      // STAFF ROUTES
+      // STAFF & FACULTY ROUTES
       // -----------------------------------------------------------
       if (pathname.startsWith('/api/staff/')) {
         const auth = getAuthUser(req);
-        if (!auth || (auth.role !== 'staff' && auth.role !== 'admin')) {
-          return sendError(res, 403, 'Forbidden: Staff role required');
+        if (!auth || (auth.role !== 'staff' && auth.role !== 'hod' && auth.role !== 'admin')) {
+          return sendError(res, 403, 'Forbidden: Staff or HOD role required');
         }
 
         // Staff Dashboard Overview
@@ -376,15 +376,76 @@ const server = http.createServer(async (req, res) => {
             ORDER BY s.period_number ASC, s.id DESC
           `).all(auth.id, today);
 
+          // Leave Balance for this academic year
+          let leaveBalance = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, '2026-2027');
+          if (!leaveBalance) {
+            db.prepare(`
+              INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
+              VALUES (?, '2026-2027', 12, 10, 15, 6)
+            `).run(auth.id);
+            leaveBalance = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, '2026-2027');
+          }
+
+          // Active approved leave today
+          const activeLeaveToday = db.prepare(`
+            SELECT * FROM leave_requests
+            WHERE staff_id = ? AND status = 'approved' AND ? BETWEEN from_date AND to_date
+          `).get(auth.id, today);
+
+          // Unread notifications count
+          const unreadNotifCount = db.prepare(`
+            SELECT COUNT(*) as count FROM notifications
+            WHERE (user_id = ? OR (user_id IS NULL AND (target_role = 'all' OR target_role = ?)))
+              AND is_read = 0
+          `).get(auth.id, auth.role).count;
+
+          // Monthly Attendance summary (this month)
+          const curMonth = today.substring(0, 7);
+          const monthRecords = db.prepare(`
+            SELECT status, COUNT(*) as count FROM staff_attendance
+            WHERE staff_id = ? AND date LIKE ?
+            GROUP BY status
+          `).all(auth.id, `${curMonth}%`);
+
+          let monthPresent = 0, monthLate = 0;
+          for (const m of monthRecords) {
+            if (m.status === 'on_time') monthPresent += m.count;
+            if (m.status === 'late') { monthPresent += m.count; monthLate += m.count; }
+          }
+          const totalDaysPassed = Math.max(1, parseInt(today.substring(8, 10), 10));
+          const monthPercentage = Math.round((monthPresent / totalDaysPassed) * 100);
+
+          // Recent 7 days attendance
+          const recentHistory = db.prepare(`
+            SELECT * FROM staff_attendance
+            WHERE staff_id = ?
+            ORDER BY date DESC LIMIT 7
+          `).all(auth.id);
+
           return sendJson(res, 200, {
             success: true,
             today,
+            user: auth,
             todayAttendance: todayAttendance || null,
+            today_check_in: todayAttendance || null,
             departments,
             classes,
             subjects,
             myTodayLogs,
-            todayCompletedCount: myTodayLogs.length
+            todayCompletedCount: myTodayLogs.length,
+            leaveBalance: leaveBalance || { casual_leave: 12, medical_leave: 10, on_duty: 15, permissions: 6, used_casual: 0, used_medical: 0, used_on_duty: 0, used_permissions: 0 },
+            leave_balances: leaveBalance || { casual_leave: 12, medical_leave: 10, on_duty: 15, permissions: 6, used_casual: 0, used_medical: 0, used_on_duty: 0, used_permissions: 0 },
+            activeLeaveToday: activeLeaveToday || null,
+            active_leave: activeLeaveToday || null,
+            unreadNotifCount,
+            unread_count: unreadNotifCount,
+            monthSummary: {
+              present: monthPresent,
+              late: monthLate,
+              percentage: Math.min(100, monthPercentage)
+            },
+            recentHistory,
+            recent_history: recentHistory
           });
         }
 
@@ -487,11 +548,11 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 400, 'Face Photo authentication is required for staff check-in.');
           }
 
-          // Enforce Campus Geofence
+          // Enforce Campus Geofence (100-meter restriction)
           const settings = getSettings();
           const campusLat = parseFloat(settings.campus_latitude || '10.9234');
           const campusLng = parseFloat(settings.campus_longitude || '78.0772');
-          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+          const maxRadius = parseInt(settings.campus_radius_meters || '100', 10);
 
           if (latitude == null || longitude == null) {
             return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
@@ -499,7 +560,7 @@ const server = http.createServer(async (req, res) => {
 
           const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
           if (dist > maxRadius) {
-            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m).`);
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m). Physical presence inside campus is required.`);
           }
 
           // Compare with 09:30 AM cutoff for On-Time vs Late
@@ -520,15 +581,24 @@ const server = http.createServer(async (req, res) => {
           if (existing) {
             db.prepare(`
               UPDATE staff_attendance 
-              SET check_in_time = ?, check_in_photo = ?, check_in_lat = ?, check_in_lng = ?, status = ? 
+              SET check_in_time = ?, check_in_photo = ?, check_in_lat = ?, check_in_lng = ?,
+                  check_in_gps_verified = 1, check_in_face_verified = 1, status = ? 
               WHERE id = ?
             `).run(time, photo, latitude, longitude, status, existing.id);
           } else {
             db.prepare(`
-              INSERT INTO staff_attendance (staff_id, date, check_in_time, check_in_photo, check_in_lat, check_in_lng, status, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 'Staff biometric mobile check-in')
+              INSERT INTO staff_attendance (staff_id, date, check_in_time, check_in_photo, check_in_lat, check_in_lng, check_in_gps_verified, check_in_face_verified, status, notes)
+              VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, 'Staff biometric mobile check-in')
             `).run(auth.id, today, time, photo, latitude, longitude, status);
           }
+
+          // Insert Notification
+          try {
+            db.prepare(`
+              INSERT INTO notifications (user_id, target_role, title, message, type)
+              VALUES (?, 'staff', 'Attendance Check-In Successful', ?, 'attendance')
+            `).run(auth.id, `Check-in recorded at ${time} inside KCAS campus (${status === 'on_time' ? 'On-Time' : 'Late'}). GPS & Face verified.`);
+          } catch (e) {}
 
           logAudit(auth.id, auth.username, 'STAFF_CHECK_IN', 'staff_attendance', auth.id, `Staff checked in at ${time} (${status}) from ${dist}m with Face Biometric Verification`, clientIp);
 
@@ -561,11 +631,11 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 400, `You have already checked out today at ${existing.check_out_time}`);
           }
 
-          // Enforce Campus Geofence
+          // Enforce Campus Geofence (100-meter restriction)
           const settings = getSettings();
           const campusLat = parseFloat(settings.campus_latitude || '10.9234');
           const campusLng = parseFloat(settings.campus_longitude || '78.0772');
-          const maxRadius = parseInt(settings.campus_radius_meters || '350', 10);
+          const maxRadius = parseInt(settings.campus_radius_meters || '100', 10);
 
           if (latitude == null || longitude == null) {
             return sendError(res, 400, 'GPS Location is required to verify physical presence inside KCAS campus.');
@@ -573,7 +643,7 @@ const server = http.createServer(async (req, res) => {
 
           const dist = getDistanceInMeters(latitude, longitude, campusLat, campusLng);
           if (dist > maxRadius) {
-            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m).`);
+            return sendError(res, 403, `Campus boundary verification failed: You are ${dist}m away from KCAS Palayam Road campus (Allowed: ${maxRadius}m). Physical presence inside campus is required.`);
           }
 
           // Calculate working hours
@@ -594,9 +664,18 @@ const server = http.createServer(async (req, res) => {
 
           db.prepare(`
             UPDATE staff_attendance 
-            SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?, working_hours = ?
+            SET check_out_time = ?, check_out_photo = ?, check_out_lat = ?, check_out_lng = ?,
+                check_out_gps_verified = 1, check_out_face_verified = 1, working_hours = ?
             WHERE id = ?
           `).run(time, photo, latitude, longitude, workingHours, existing.id);
+
+          // Insert Notification
+          try {
+            db.prepare(`
+              INSERT INTO notifications (user_id, target_role, title, message, type)
+              VALUES (?, 'staff', 'Attendance Check-Out Successful', ?, 'attendance')
+            `).run(auth.id, `Check-out recorded at ${time}. Total hours logged: ${workingHours} hrs. GPS & Face verified.`);
+          } catch (e) {}
 
           logAudit(auth.id, auth.username, 'STAFF_CHECK_OUT', 'staff_attendance', auth.id, `Staff checked out at ${time} (${workingHours} hrs) from ${dist}m with Face Biometric Verification`, clientIp);
 
@@ -933,6 +1012,545 @@ const server = http.createServer(async (req, res) => {
       }
 
       // -----------------------------------------------------------
+      // HOD ROUTES
+      // -----------------------------------------------------------
+      if (pathname.startsWith('/api/hod/')) {
+        const auth = getAuthUser(req);
+        if (!auth || (auth.role !== 'hod' && auth.role !== 'admin')) {
+          return sendError(res, 403, 'Forbidden: HOD or Administrator access required');
+        }
+
+        // Get HOD's department ID
+        let hodDeptId = auth.deptId;
+        if (!hodDeptId) {
+          const uRow = db.prepare('SELECT department_id FROM users WHERE id = ?').get(auth.id);
+          hodDeptId = uRow ? uRow.department_id : null;
+        }
+
+        // HOD Dashboard Overview
+        if (pathname === '/api/hod/dashboard' && req.method === 'GET') {
+          const today = new Date().toISOString().split('T')[0];
+          const dept = db.prepare('SELECT id, code, name FROM departments WHERE id = ?').get(hodDeptId);
+
+          if (!dept) {
+            return sendError(res, 404, 'Department not assigned to HOD');
+          }
+
+          // Department Staff
+          const staffList = db.prepare(`
+            SELECT u.id, u.username, u.full_name, u.email, u.phone, u.designation, u.photo_url, u.is_active,
+                   sa.check_in_time, sa.check_out_time, sa.status as attendance_status,
+                   sa.check_in_gps_verified, sa.check_in_face_verified
+            FROM users u
+            LEFT JOIN staff_attendance sa ON sa.staff_id = u.id AND sa.date = ?
+            WHERE u.department_id = ? AND u.role = 'staff' AND u.is_active = 1
+            ORDER BY u.full_name ASC
+          `).all(today, dept.id);
+
+          const totalStaff = staffList.length;
+          let presentToday = 0;
+          let lateToday = 0;
+          let currentlyWorking = 0;
+
+          // Check approved leaves for today in this department
+          const activeLeaves = db.prepare(`
+            SELECT lr.*, u.full_name as staff_name
+            FROM leave_requests lr
+            JOIN users u ON lr.staff_id = u.id
+            WHERE u.department_id = ? AND lr.status = 'approved' AND ? BETWEEN lr.from_date AND lr.to_date
+          `).all(dept.id, today);
+          const onLeaveToday = activeLeaves.length;
+
+          for (const s of staffList) {
+            if (s.check_in_time) {
+              presentToday++;
+              if (s.attendance_status === 'late') lateToday++;
+              if (!s.check_out_time) currentlyWorking++;
+            }
+          }
+          const absentToday = Math.max(0, totalStaff - presentToday - onLeaveToday);
+
+          // Today's Duty submissions from department staff
+          const todayDutyLogs = db.prepare(`
+            SELECT s.id, s.period_number, s.start_time, s.end_time, s.lesson_topic, s.lesson_summary, s.lesson_photo,
+                   u.full_name as staff_name, c.name as class_name, sub.name as subject_name
+            FROM attendance_sessions s
+            JOIN users u ON s.staff_id = u.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.department_id = ? AND s.date = ?
+            ORDER BY s.period_number ASC
+          `).all(dept.id, today);
+
+          // Pending leave requests for department staff
+          const pendingLeaves = db.prepare(`
+            SELECT lr.*, u.full_name as staff_name, u.designation
+            FROM leave_requests lr
+            JOIN users u ON lr.staff_id = u.id
+            WHERE u.department_id = ? AND lr.status = 'pending'
+            ORDER BY lr.id DESC
+          `).all(dept.id);
+
+          return sendJson(res, 200, {
+            success: true,
+            department: dept,
+            metrics: {
+              totalStaff,
+              presentToday,
+              absentToday,
+              lateToday,
+              onLeaveToday,
+              currentlyWorking
+            },
+            staffList,
+            todayDutyLogs,
+            pendingLeaves,
+            activeLeaves
+          });
+        }
+
+        // HOD: Department Class Duty Submissions
+        if (pathname === '/api/hod/period-logs' && req.method === 'GET') {
+          const date = parsedUrl.searchParams.get('date') || new Date().toISOString().split('T')[0];
+          const periodNumber = parsedUrl.searchParams.get('period');
+
+          let query = `
+            SELECT s.*, u.full_name as staff_name, u.designation,
+                   c.name as class_name, sub.name as subject_name
+            FROM attendance_sessions s
+            JOIN users u ON s.staff_id = u.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.department_id = ? AND s.date = ?
+          `;
+          const params = [hodDeptId, date];
+          if (periodNumber) {
+            query += ' AND s.period_number = ?';
+            params.push(parseInt(periodNumber, 10));
+          }
+          query += ' ORDER BY s.period_number ASC, s.id DESC';
+
+          const logs = db.prepare(query).all(...params);
+          return sendJson(res, 200, { success: true, date, logs });
+        }
+      }
+
+      // -----------------------------------------------------------
+      // LEAVE MANAGEMENT ROUTES
+      // -----------------------------------------------------------
+      if (pathname.startsWith('/api/leaves/')) {
+        const auth = getAuthUser(req);
+        if (!auth) return sendError(res, 401, 'Unauthorized');
+
+        // Apply for Leave (Staff or HOD)
+        if (pathname === '/api/leaves/apply' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          const rawType = body.leaveType || body.leave_type;
+          const fromDate = body.fromDate || body.from_date;
+          const toDate = body.toDate || body.to_date;
+          const reason = body.reason;
+          const totalDays = parseFloat(body.totalDays || body.total_days || 1);
+
+          if (!rawType || !fromDate || !toDate || !reason) {
+            return sendError(res, 400, 'All leave application fields (type, from date, to date, reason) are required');
+          }
+
+          let leaveType = rawType.toLowerCase();
+          if (leaveType.includes('casual')) leaveType = 'casual';
+          else if (leaveType.includes('medical')) leaveType = 'medical';
+          else if (leaveType.includes('duty')) leaveType = 'on_duty';
+          else if (leaveType.includes('permission')) leaveType = 'permission';
+          else if (leaveType.includes('loss')) leaveType = 'loss_of_pay';
+
+          const days = parseFloat(totalDays || 1);
+          const year = '2026-2027';
+
+          // Get or create leave balance
+          let bal = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, year);
+          if (!bal) {
+            db.prepare(`
+              INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
+              VALUES (?, ?, 12, 10, 15, 6)
+            `).run(auth.id, year);
+            bal = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, year);
+          }
+
+          // Balance check
+          if (leaveType === 'casual') {
+            const rem = (bal.casual_leave || 12) - (bal.used_casual || 0);
+            if (days > rem) return sendError(res, 400, `Insufficient casual leave balance (${rem} days available)`);
+          } else if (leaveType === 'medical') {
+            const rem = (bal.medical_leave || 10) - (bal.used_medical || 0);
+            if (days > rem) return sendError(res, 400, `Insufficient medical leave balance (${rem} days available)`);
+          }
+
+          const ins = db.prepare(`
+            INSERT INTO leave_requests (staff_id, leave_type, from_date, to_date, total_days, reason, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+          `).run(auth.id, leaveType, fromDate, toDate, days, reason.trim());
+
+          // Insert Notification for HOD and Admin
+          try {
+            db.prepare(`
+              INSERT INTO notifications (target_role, department_id, title, message, type)
+              VALUES ('hod', ?, 'New Leave Application', ?, 'leave')
+            `).run(auth.deptId, `${auth.name} applied for ${leaveType.toUpperCase()} leave (${fromDate} to ${toDate})`);
+
+            db.prepare(`
+              INSERT INTO notifications (target_role, title, message, type)
+              VALUES ('admin', 'New Leave Application', ?, 'leave')
+            `).run(`${auth.name} applied for ${leaveType.toUpperCase()} leave (${fromDate} to ${toDate})`);
+          } catch (e) {}
+
+          logAudit(auth.id, auth.username, 'APPLY_LEAVE', 'leave_requests', ins.lastInsertRowid, `Applied for ${leaveType} leave for ${days} days (${fromDate} to ${toDate})`, clientIp);
+
+          return sendJson(res, 201, {
+            success: true,
+            message: 'Leave application submitted successfully. Pending HOD / Admin approval.',
+            leaveId: ins.lastInsertRowid
+          });
+        }
+
+        // View My Leaves & Balance
+        if (pathname === '/api/leaves/my' && req.method === 'GET') {
+          const leaves = db.prepare(`
+            SELECT lr.*, rev.full_name as reviewer_name
+            FROM leave_requests lr
+            LEFT JOIN users rev ON lr.reviewed_by = rev.id
+            WHERE lr.staff_id = ?
+            ORDER BY lr.id DESC
+          `).all(auth.id);
+
+          const year = '2026-2027';
+          let balance = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, year);
+          if (!balance) {
+            db.prepare(`
+              INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
+              VALUES (?, ?, 12, 10, 15, 6)
+            `).run(auth.id, year);
+            balance = db.prepare('SELECT * FROM leave_balances WHERE staff_id = ? AND academic_year = ?').get(auth.id, year);
+          }
+
+          return sendJson(res, 200, { success: true, leaves, balance });
+        }
+
+        // View Pending Leaves (HOD / Admin)
+        if (pathname === '/api/leaves/pending' && req.method === 'GET') {
+          if (auth.role !== 'hod' && auth.role !== 'admin') {
+            return sendError(res, 403, 'Forbidden');
+          }
+
+          let query = `
+            SELECT lr.*, u.full_name as staff_name, u.designation, d.name as department_name, d.id as department_id
+            FROM leave_requests lr
+            JOIN users u ON lr.staff_id = u.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE lr.status = 'pending'
+          `;
+          const params = [];
+          if (auth.role === 'hod' && auth.deptId) {
+            query += ' AND u.department_id = ?';
+            params.push(auth.deptId);
+          }
+          query += ' ORDER BY lr.id DESC';
+
+          const pendingLeaves = db.prepare(query).all(...params);
+          return sendJson(res, 200, { success: true, pendingLeaves, leaves: pendingLeaves });
+        }
+
+        // Approve / Reject Leave (HOD / Admin)
+        if (pathname === '/api/leaves/review' && req.method === 'POST') {
+          if (auth.role !== 'hod' && auth.role !== 'admin') {
+            return sendError(res, 403, 'Forbidden');
+          }
+
+          const body = await parseJsonBody(req);
+          const leaveId = parseInt(body.leaveId || body.leave_id, 10);
+          const action = (body.action || body.status || '').toLowerCase();
+          const remarks = body.remarks || '';
+
+          if (!leaveId || !['approved', 'rejected'].includes(action)) {
+            return sendError(res, 400, 'Valid leave ID and action (approved/rejected) are required');
+          }
+
+          const reqRow = db.prepare(`
+            SELECT lr.*, u.department_id, u.full_name as staff_name, u.id as staff_id
+            FROM leave_requests lr
+            JOIN users u ON lr.staff_id = u.id
+            WHERE lr.id = ?
+          `).get(leaveId);
+
+          if (!reqRow) return sendError(res, 404, 'Leave request not found');
+
+          if (auth.role === 'hod' && auth.deptId && reqRow.department_id !== auth.deptId) {
+            return sendError(res, 403, 'Forbidden: You can only review leave requests for your own department staff');
+          }
+
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+          db.prepare(`
+            UPDATE leave_requests
+            SET status = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = ?, remarks = ?
+            WHERE id = ?
+          `).run(action, auth.id, auth.name, now, remarks || '', leaveId);
+
+          // If approved, deduct from leave_balances
+          if (action === 'approved') {
+            const year = '2026-2027';
+            const col = reqRow.leave_type === 'casual' ? 'used_casual' :
+                        (reqRow.leave_type === 'medical' ? 'used_medical' :
+                        (reqRow.leave_type === 'on_duty' ? 'used_on_duty' : 'used_permissions'));
+            db.prepare(`
+              UPDATE leave_balances
+              SET ${col} = ${col} + ?
+              WHERE staff_id = ? AND academic_year = ?
+            `).run(reqRow.total_days, reqRow.staff_id, year);
+          }
+
+          // Notify staff member
+          try {
+            db.prepare(`
+              INSERT INTO notifications (user_id, target_role, title, message, type)
+              VALUES (?, 'staff', ?, ?, 'leave')
+            `).run(
+              reqRow.staff_id,
+              `Leave Request ${action.toUpperCase()}`,
+              `Your leave application for ${reqRow.from_date} to ${reqRow.to_date} has been ${action} by ${auth.name}.${remarks ? ' Remarks: ' + remarks : ''}`
+            );
+          } catch (e) {}
+
+          logAudit(auth.id, auth.username, `LEAVE_${action.toUpperCase()}`, 'leave_requests', leaveId, `${action.toUpperCase()} leave request for ${reqRow.staff_name} (${reqRow.from_date} to ${reqRow.to_date})`, clientIp);
+
+          return sendJson(res, 200, {
+            success: true,
+            message: `Leave request has been successfully ${action}!`
+          });
+        }
+      }
+
+      // -----------------------------------------------------------
+      // ATTENDANCE CALENDAR ROUTE
+      // -----------------------------------------------------------
+      if (pathname === '/api/attendance/calendar' && req.method === 'GET') {
+        const auth = getAuthUser(req);
+        if (!auth) return sendError(res, 401, 'Unauthorized');
+
+        let targetStaffId = auth.id;
+        const reqStaffId = parsedUrl.searchParams.get('staff_id');
+        if (reqStaffId && (auth.role === 'admin' || auth.role === 'hod')) {
+          targetStaffId = parseInt(reqStaffId, 10);
+        }
+
+        const now = new Date();
+        const year = parseInt(parsedUrl.searchParams.get('year') || now.getFullYear(), 10);
+        const month = parseInt(parsedUrl.searchParams.get('month') || (now.getMonth() + 1), 10);
+
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const monthStr = month < 10 ? `0${month}` : `${month}`;
+        const startDate = `${year}-${monthStr}-01`;
+        const endDate = `${year}-${monthStr}-${daysInMonth}`;
+
+        // Get all attendance records for this month
+        const records = db.prepare(`
+          SELECT * FROM staff_attendance
+          WHERE staff_id = ? AND date BETWEEN ? AND ?
+        `).all(targetStaffId, startDate, endDate);
+        const recordMap = new Map();
+        for (const r of records) {
+          recordMap.set(r.date, r);
+        }
+
+        // Get approved leaves for this month
+        const approvedLeaves = db.prepare(`
+          SELECT * FROM leave_requests
+          WHERE staff_id = ? AND status = 'approved'
+            AND (from_date <= ? AND to_date >= ?)
+        `).all(targetStaffId, endDate, startDate);
+
+        // Get holidays
+        const holidays = db.prepare('SELECT * FROM holidays WHERE date BETWEEN ? AND ?').all(startDate, endDate);
+        const holidayMap = new Map();
+        for (const h of holidays) {
+          holidayMap.set(h.date, h.title);
+        }
+
+        const calendarDays = [];
+        const todayStr = now.toISOString().split('T')[0];
+
+        let presentCount = 0, lateCount = 0, leaveCount = 0, absentCount = 0, holidayCount = 0;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dStr = d < 10 ? `0${d}` : `${d}`;
+          const curDate = `${year}-${monthStr}-${dStr}`;
+          const dayOfWeek = new Date(year, month - 1, d).getDay(); // 0 = Sunday
+
+          let status = 'upcoming';
+          let label = 'Upcoming';
+          let details = null;
+
+          if (dayOfWeek === 0) {
+            status = 'holiday';
+            label = 'Sunday Weekend';
+            holidayCount++;
+          } else if (holidayMap.has(curDate)) {
+            status = 'holiday';
+            label = holidayMap.get(curDate);
+            holidayCount++;
+          } else if (recordMap.has(curDate)) {
+            const rec = recordMap.get(curDate);
+            if (rec.status === 'late') {
+              status = 'late';
+              label = `Late Arrival (${rec.check_in_time || ''})`;
+              lateCount++;
+            } else {
+              status = 'present';
+              label = `Present (${rec.check_in_time || ''})`;
+              presentCount++;
+            }
+            details = rec;
+          } else {
+            const isLeave = approvedLeaves.find(l => curDate >= l.from_date && curDate <= l.to_date);
+            if (isLeave) {
+              status = 'leave';
+              label = `On Leave (${isLeave.leave_type.toUpperCase()})`;
+              leaveCount++;
+              details = isLeave;
+            } else if (curDate < todayStr) {
+              status = 'absent';
+              label = 'Absent (No check-in)';
+              absentCount++;
+            } else if (curDate === todayStr) {
+              status = 'pending';
+              label = 'Not Checked In Yet';
+            }
+          }
+
+          calendarDays.push({
+            day: d,
+            date: curDate,
+            dayOfWeek,
+            status,
+            label,
+            details
+          });
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          year,
+          month,
+          daysInMonth,
+          summary: {
+            present: presentCount,
+            late: lateCount,
+            leave: leaveCount,
+            absent: absentCount,
+            holidays: holidayCount,
+            totalWorkingDays: daysInMonth - holidayCount
+          },
+          calendarDays,
+          calendar: calendarDays
+        });
+      }
+
+      // -----------------------------------------------------------
+      // NOTIFICATIONS ROUTES
+      // -----------------------------------------------------------
+      if (pathname.startsWith('/api/notifications')) {
+        const auth = getAuthUser(req);
+        if (!auth) return sendError(res, 401, 'Unauthorized');
+
+        if (pathname === '/api/notifications' && req.method === 'GET') {
+          const list = db.prepare(`
+            SELECT * FROM notifications
+            WHERE user_id = ? OR (user_id IS NULL AND (target_role = 'all' OR target_role = ?))
+            ORDER BY id DESC LIMIT 50
+          `).all(auth.id, auth.role);
+
+          const unreadCount = list.filter(n => !n.is_read).length;
+          return sendJson(res, 200, { success: true, notifications: list, unreadCount, unread_count: unreadCount });
+        }
+
+        if (pathname === '/api/notifications/read' && req.method === 'POST') {
+          const body = await parseJsonBody(req);
+          if (body.id) {
+            db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(body.id);
+          } else {
+            db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR (user_id IS NULL AND (target_role = "all" OR target_role = ?))').run(auth.id, auth.role);
+          }
+          return sendJson(res, 200, { success: true, message: 'Notifications marked as read' });
+        }
+
+        if (pathname === '/api/notifications/broadcast' && req.method === 'POST') {
+          if (auth.role !== 'admin' && auth.role !== 'hod') {
+            return sendError(res, 403, 'Forbidden');
+          }
+          const body = await parseJsonBody(req);
+          const { title, message, targetRole, departmentId, type } = body;
+          if (!title || !message) {
+            return sendError(res, 400, 'Title and message are required');
+          }
+
+          db.prepare(`
+            INSERT INTO notifications (target_role, department_id, title, message, type)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(targetRole || 'all', departmentId || null, title.trim(), message.trim(), type || 'announcement');
+
+          logAudit(auth.id, auth.username, 'BROADCAST_NOTIFICATION', 'notifications', null, `Announcement: ${title}`, clientIp);
+
+          return sendJson(res, 201, { success: true, message: 'Notification broadcasted successfully' });
+        }
+      }
+
+      // -----------------------------------------------------------
+      // PASSWORD MANAGEMENT ROUTES
+      // -----------------------------------------------------------
+      if (pathname === '/api/auth/change-password' && req.method === 'POST') {
+        const auth = getAuthUser(req);
+        if (!auth) return sendError(res, 401, 'Unauthorized');
+
+        const body = await parseJsonBody(req);
+        const { oldPassword, newPassword } = body;
+        if (!oldPassword || !newPassword) {
+          return sendError(res, 400, 'Please provide both current and new password');
+        }
+        if (newPassword.length < 6) {
+          return sendError(res, 400, 'New password must be at least 6 characters');
+        }
+
+        const userRow = db.prepare('SELECT id, password_hash, salt FROM users WHERE id = ?').get(auth.id);
+        if (!userRow || !verifyPassword(oldPassword, userRow.password_hash, userRow.salt)) {
+          return sendError(res, 400, 'Current password is incorrect');
+        }
+
+        const { hash, salt } = hashPassword(newPassword);
+        db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, auth.id);
+
+        logAudit(auth.id, auth.username, 'CHANGE_PASSWORD', 'users', auth.id, 'User changed their password', clientIp);
+        return sendJson(res, 200, { success: true, message: 'Password updated successfully' });
+      }
+
+      if (pathname === '/api/admin/reset-password' && req.method === 'POST') {
+        const auth = getAuthUser(req);
+        if (!auth || auth.role !== 'admin') {
+          return sendError(res, 403, 'Forbidden: Master Admin privileges required');
+        }
+
+        const body = await parseJsonBody(req);
+        const { userId, newPassword } = body;
+        if (!userId || !newPassword) {
+          return sendError(res, 400, 'User ID and new password are required');
+        }
+
+        const { hash, salt } = hashPassword(newPassword);
+        db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, userId);
+
+        const targetUser = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+        logAudit(auth.id, auth.username, 'RESET_PASSWORD', 'users', userId, `Admin reset password for user ${targetUser?.username || userId}`, clientIp);
+
+        return sendJson(res, 200, { success: true, message: 'Password has been reset successfully by Administrator' });
+      }
+
+      // -----------------------------------------------------------
       // ADMIN ROUTES
       // -----------------------------------------------------------
       if (pathname.startsWith('/api/admin/')) {
@@ -945,117 +1563,148 @@ const server = http.createServer(async (req, res) => {
         if (pathname === '/api/admin/dashboard' && req.method === 'GET') {
           const today = new Date().toISOString().split('T')[0];
           const settings = getSettings();
-          const threshold = parseInt(settings.low_attendance_threshold || '75', 10);
 
-          // Total user counts
-          const studentCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND is_active = 1").get().count;
+          // Total faculty counts
           const staffCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'staff' AND is_active = 1").get().count;
+          const hodCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'hod' AND is_active = 1").get().count;
           const deptCount = db.prepare("SELECT COUNT(*) as count FROM departments").get().count;
           const classCount = db.prepare("SELECT COUNT(*) as count FROM classes").get().count;
+          const totalFaculty = staffCount + hodCount;
 
-          // Today's session and attendance counts
-          const todaySessionsCount = db.prepare("SELECT COUNT(*) as count FROM attendance_sessions WHERE date = ?").get(today).count;
-          const activeSessionsCount = db.prepare("SELECT COUNT(*) as count FROM attendance_sessions WHERE status = 'active'").get().count;
-
-          // Today's student attendance statuses
-          const todayAttCounts = db.prepare(`
-            SELECT sa.status, COUNT(*) as count
-            FROM student_attendance sa
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            WHERE s.date = ?
-            GROUP BY sa.status
+          // Today's staff attendance metrics
+          const presentStaffRows = db.prepare(`
+            SELECT sa.*, u.full_name, u.role
+            FROM staff_attendance sa
+            JOIN users u ON sa.staff_id = u.id
+            WHERE sa.date = ? AND sa.check_in_time IS NOT NULL
           `).all(today);
 
-          let todayPresent = 0, todayLate = 0, todayAbsent = 0;
-          for (const item of todayAttCounts) {
-            if (item.status === 'present') todayPresent = item.count;
-            if (item.status === 'late') todayLate = item.count;
-            if (item.status === 'absent') todayAbsent = item.count;
+          const presentToday = presentStaffRows.length;
+          let lateArrivals = 0;
+          let staffCurrentlyWorking = 0;
+
+          for (const row of presentStaffRows) {
+            if (row.status === 'late') lateArrivals++;
+            if (!row.check_out_time || row.check_out_time.trim() === '') staffCurrentlyWorking++;
           }
-          const todayTotalMarked = todayPresent + todayLate + todayAbsent;
-          const todayAttendanceRate = todayTotalMarked > 0 ? Math.round(((todayPresent + todayLate) / todayTotalMarked) * 100) : 0;
 
-          // Today's Absentees List
-          const todayAbsentees = db.prepare(`
-            SELECT u.register_number, u.full_name, c.name as class_name, sub.name as subject_name, s.start_time
-            FROM student_attendance sa
-            JOIN users u ON sa.student_id = u.id
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            JOIN classes c ON s.class_id = c.id
-            JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.date = ? AND sa.status = 'absent'
-            ORDER BY u.register_number ASC LIMIT 15
+          // On leave today (approved leaves)
+          const onLeaveRows = db.prepare(`
+            SELECT lr.*, u.full_name as staff_name, u.role
+            FROM leave_requests lr
+            JOIN users u ON lr.staff_id = u.id
+            WHERE lr.status = 'approved' AND ? BETWEEN lr.from_date AND lr.to_date
+          `).all(today);
+          const onLeave = onLeaveRows.length;
+
+          // Not checked in & absent
+          const notCheckedIn = Math.max(0, totalFaculty - presentToday - onLeave);
+          const absentToday = notCheckedIn;
+
+          // Today's Duty Period logs submitted by all staff
+          const todayDutyLogs = db.prepare(`
+            SELECT s.*, u.full_name as staff_name, u.role, d.name as department_name, c.name as class_name, sub.name as subject_name
+            FROM attendance_sessions s
+            JOIN users u ON s.staff_id = u.id
+            LEFT JOIN departments d ON s.department_id = d.id
+            LEFT JOIN classes c ON s.class_id = c.id
+            LEFT JOIN subjects sub ON s.subject_id = sub.id
+            WHERE s.date = ?
+            ORDER BY s.period_number ASC, s.id DESC
           `).all(today);
 
-          // Today's Late Arrivals List
-          const todayLateArrivals = db.prepare(`
-            SELECT u.register_number, u.full_name, c.name as class_name, sub.name as subject_name, sa.marked_at
-            FROM student_attendance sa
-            JOIN users u ON sa.student_id = u.id
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            JOIN classes c ON s.class_id = c.id
-            JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.date = ? AND sa.status = 'late'
-            ORDER BY sa.marked_at DESC LIMIT 15
-          `).all(today);
-
-          // Staff Check-ins today
+          // Staff & HOD Check-ins today
           const staffCheckIns = db.prepare(`
-            SELECT u.full_name, u.designation, d.name as department_name,
-                   sa.check_in_time, sa.check_out_time, sa.status, sa.working_hours
+            SELECT u.id, u.full_name, u.role, u.designation, d.name as department_name,
+                   sa.check_in_time, sa.check_out_time, sa.status, sa.working_hours,
+                   sa.check_in_gps_verified, sa.check_in_face_verified
             FROM users u
             LEFT JOIN departments d ON u.department_id = d.id
             LEFT JOIN staff_attendance sa ON sa.staff_id = u.id AND sa.date = ?
-            WHERE u.role = 'staff' AND u.is_active = 1
+            WHERE u.role IN ('staff', 'hod') AND u.is_active = 1
             ORDER BY sa.check_in_time DESC NULLS LAST
           `).all(today);
 
-          // Low-Attendance Alert Students (< threshold)
-          const allStudents = db.prepare(`
-            SELECT u.id, u.register_number, u.full_name, u.email, u.phone, c.name as class_name, d.name as department_name,
-                   (SELECT COUNT(*) FROM attendance_sessions ses WHERE ses.class_id = u.class_id AND ses.status != 'cancelled') as total_sessions,
-                   (SELECT COUNT(*) FROM student_attendance sa WHERE sa.student_id = u.id AND sa.status IN ('present', 'late')) as attended_sessions
-            FROM users u
-            JOIN classes c ON u.class_id = c.id
-            JOIN departments d ON u.department_id = d.id
-            WHERE u.role = 'student' AND u.is_active = 1
-          `).all();
+          // Pending leave requests count
+          const pendingLeavesCount = db.prepare("SELECT COUNT(*) as count FROM leave_requests WHERE status = 'pending'").get().count;
 
-          const lowAttendanceStudents = allStudents.map(stu => {
-            const pct = stu.total_sessions > 0 ? Math.round((stu.attended_sessions / stu.total_sessions) * 100) : 100;
-            return { ...stu, percentage: pct };
-          }).filter(stu => stu.total_sessions > 0 && stu.percentage < threshold)
-            .sort((a, b) => a.percentage - b.percentage);
+          // Recent Activities Timeline
+          const recentActivities = [];
 
-          // Pending correction requests count
-          const pendingCorrectionsCount = db.prepare("SELECT COUNT(*) as count FROM correction_requests WHERE status = 'pending'").get().count;
+          for (const c of staffCheckIns.slice(0, 10)) {
+            if (c.check_in_time) {
+              recentActivities.push({
+                type: 'checkin',
+                icon: '⏱️',
+                title: `${c.full_name} (${(c.role || 'staff').toUpperCase()}) Checked In`,
+                description: `${c.department_name || 'KCAS'} • Time: ${c.check_in_time} (${(c.status || 'on_time').toUpperCase()}) • GPS & Face Verified`,
+                timestamp: `${today} ${c.check_in_time}`
+              });
+            }
+            if (c.check_out_time) {
+              recentActivities.push({
+                type: 'checkout',
+                icon: '🚪',
+                title: `${c.full_name} Checked Out`,
+                description: `Time: ${c.check_out_time} • Hours: ${c.working_hours || 0} hrs`,
+                timestamp: `${today} ${c.check_out_time}`
+              });
+            }
+          }
 
-          // Recent Audit Logs
-          const recentLogs = db.prepare(`
-            SELECT * FROM audit_logs ORDER BY id DESC LIMIT 10
-          `).all();
+          for (const d of todayDutyLogs.slice(0, 8)) {
+            recentActivities.push({
+              type: 'duty',
+              icon: '📝',
+              title: `${d.staff_name} logged Period ${d.period_number}`,
+              description: `${d.class_name || 'Class'} • ${d.subject_name || 'Subject'} • ${d.lesson_topic || 'Duty notes'}`,
+              timestamp: `${d.date} ${d.start_time}`
+            });
+          }
+
+          for (const l of onLeaveRows.slice(0, 5)) {
+            recentActivities.push({
+              type: 'leave',
+              icon: '🏖️',
+              title: `${l.staff_name} on Approved Leave`,
+              description: `${(l.leave_type || 'leave').toUpperCase()} leave (${l.from_date} to ${l.to_date})`,
+              timestamp: l.created_at || today
+            });
+          }
+
+          const recentLogs = db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 15').all();
+          for (const a of recentLogs.slice(0, 8)) {
+            recentActivities.push({
+              type: 'audit',
+              icon: '📜',
+              title: `Admin Action: ${a.action}`,
+              description: `${a.username}: ${a.details}`,
+              timestamp: a.created_at
+            });
+          }
+
+          recentActivities.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
           return sendJson(res, 200, {
             success: true,
-            counts: {
-              students: studentCount,
-              staff: staffCount,
-              departments: deptCount,
-              classes: classCount,
-              activeSessions: activeSessionsCount,
-              todaySessions: todaySessionsCount,
-              pendingCorrections: pendingCorrectionsCount
+            today,
+            stats: {
+              totalStaff: staffCount,
+              totalHods: hodCount,
+              totalFaculty,
+              presentToday,
+              absentToday,
+              lateArrivals,
+              onLeave,
+              notCheckedIn,
+              staffCurrentlyWorking,
+              departmentsCount: deptCount,
+              classesCount: classCount,
+              pendingLeavesCount
             },
-            todayAttendance: {
-              present: todayPresent,
-              late: todayLate,
-              absent: todayAbsent,
-              rate: todayAttendanceRate
-            },
-            todayAbsentees,
-            todayLateArrivals,
             staffCheckIns,
-            lowAttendanceStudents,
+            todayDutyLogs,
+            recentActivities: recentActivities.slice(0, 25),
             recentLogs
           });
         }
@@ -1327,7 +1976,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Academic Structure Lists (Departments, Courses, Classes, Subjects)
-        if (pathname === '/api/admin/academic' && req.method === 'GET') {
+        if ((pathname === '/api/admin/academic' || pathname === '/api/academic/structure') && req.method === 'GET') {
           const departments = db.prepare('SELECT * FROM departments ORDER BY name ASC').all();
           const courses = db.prepare(`
             SELECT c.*, d.name as department_name, d.code as department_code

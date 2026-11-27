@@ -322,6 +322,83 @@ const API = {
     return this.request(`/api/admin/audit-logs${action ? '?action=' + action : ''}`);
   },
 
+  // HOD APIs
+  async getHodDashboard() {
+    return this.request('/api/hod/dashboard');
+  },
+
+  async getHodPeriodLogs(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/api/hod/period-logs${query ? '?' + query : ''}`);
+  },
+
+  // Leave Management APIs
+  async applyLeave(data) {
+    return this.request('/api/leaves/apply', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async getMyLeaves() {
+    return this.request('/api/leaves/my');
+  },
+
+  async getPendingLeaves() {
+    return this.request('/api/leaves/pending');
+  },
+
+  async reviewLeave(leaveId, action, remarks) {
+    return this.request('/api/leaves/review', {
+      method: 'POST',
+      body: JSON.stringify({ leaveId, action, remarks })
+    });
+  },
+
+  // Attendance Calendar API
+  async getAttendanceCalendar(month, year, staffId) {
+    const params = {};
+    if (month) params.month = month;
+    if (year) params.year = year;
+    if (staffId) params.staff_id = staffId;
+    const query = new URLSearchParams(params).toString();
+    return this.request(`/api/attendance/calendar${query ? '?' + query : ''}`);
+  },
+
+  // Notifications API
+  async getNotifications() {
+    return this.request('/api/notifications');
+  },
+
+  async markNotificationRead(id) {
+    return this.request('/api/notifications/read', {
+      method: 'POST',
+      body: JSON.stringify({ id })
+    });
+  },
+
+  async broadcastNotification(data) {
+    return this.request('/api/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  // Password Management
+  async changePassword(oldPassword, newPassword) {
+    return this.request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword })
+    });
+  },
+
+  async adminResetPassword(userId, newPassword) {
+    return this.request('/api/admin/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId, newPassword })
+    });
+  },
+
   getExportReportUrl(format = 'csv', filters = {}) {
     const token = this.getToken();
     const query = new URLSearchParams({ format, ...filters }).toString();

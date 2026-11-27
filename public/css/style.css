@@ -1099,3 +1099,368 @@ a:hover {
   background: #0F172A;
   display: block;
 }
+
+/* ============================================================ */
+/* KCAS UPGRADE v1.1.0: LIGHT RED & WHITE THEME COMPONENTS      */
+/* ============================================================ */
+
+/* Quick Actions Grid */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #FFFFFF;
+  border: 1.5px solid #FECDD3;
+  border-radius: 14px;
+  padding: 14px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(185, 28, 28, 0.04);
+}
+
+.quick-action-btn:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.12);
+}
+
+.quick-action-icon {
+  font-size: 24px;
+}
+
+.quick-action-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.2;
+}
+
+/* Leave Balance Cards */
+.leave-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.leave-card {
+  background: #FFFFFF;
+  border: 1.5px solid #FECDD3;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(185, 28, 28, 0.04);
+  transition: transform 0.2s ease;
+}
+
+.leave-card:hover {
+  transform: translateY(-2px);
+  border-color: #B91C1C;
+}
+
+.leave-count {
+  font-size: 20px;
+  font-weight: 800;
+  color: #B91C1C;
+  display: block;
+}
+
+.leave-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  margin-top: 2px;
+  display: block;
+}
+
+/* Interactive Monthly Attendance Calendar */
+.calendar-container {
+  background: #FFFFFF;
+  border: 1px solid #FECDD3;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 4px 14px rgba(185, 28, 28, 0.05);
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.calendar-month-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #B91C1C;
+}
+
+.calendar-nav-btn {
+  background: #FEF2F2;
+  border: 1px solid #FECDD3;
+  color: #B91C1C;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.calendar-nav-btn:hover {
+  background: #FEE2E2;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-day-header {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748B;
+  text-transform: uppercase;
+  padding: 6px 0;
+}
+
+.calendar-cell {
+  background: #FAF9F9;
+  border: 1px solid #F1F5F9;
+  border-radius: 10px;
+  min-height: 54px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calendar-cell:hover {
+  background: #FEF2F2;
+  border-color: #FECDD3;
+  transform: scale(1.03);
+}
+
+.calendar-cell.other-month {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.day-number {
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  text-align: right;
+  padding-right: 2px;
+}
+
+.day-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.day-present {
+  background: #ECFDF5;
+  color: #059669;
+  border: 1px solid #A7F3D0;
+}
+
+.day-absent {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECDD3;
+}
+
+.day-late {
+  background: #FFFBEB;
+  color: #D97706;
+  border: 1px solid #FDE68A;
+}
+
+.day-leave {
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+}
+
+.day-holiday {
+  background: #F3E8FF;
+  color: #7C3AED;
+  border: 1px solid #DDD6FE;
+}
+
+.day-none {
+  background: transparent;
+  color: #94A3B8;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed #FECDD3;
+  font-size: 11px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* Settings / More Section */
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFFFFF;
+  border: 1.5px solid #FECDD3;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(185, 28, 28, 0.03);
+}
+
+.settings-item:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
+  transform: translateX(3px);
+}
+
+.settings-item-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #FEF2F2;
+  color: #B91C1C;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 1px solid #FECDD3;
+}
+
+.settings-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0F172A;
+  display: block;
+}
+
+.settings-desc {
+  font-size: 11px;
+  color: #64748B;
+  display: block;
+  margin-top: 1px;
+}
+
+.settings-arrow {
+  color: #94A3B8;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* Activity Timeline */
+.activity-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #FFFFFF;
+  border: 1px solid #F1F5F9;
+  border-radius: 10px;
+}
+
+.activity-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #FEF2F2;
+  border: 1px solid #FECDD3;
+  color: #B91C1C;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-text {
+  font-size: 12px;
+  color: #0F172A;
+  font-weight: 600;
+}
+
+.activity-time {
+  font-size: 10px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+/* Star Rating */
+.star-rating {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  font-size: 32px;
+  cursor: pointer;
+  color: #CBD5E1;
+  margin: 12px 0;
+}
+
+.star-rating .star.active {
+  color: #F59E0B;
+}
+
