@@ -476,11 +476,106 @@ function ensureAdminCredentials() {
   }
 }
 
+// Ensure all 14 official KCAS Departments, Courses, and Classes
+function ensureKCASDepartments() {
+  try {
+    const officialDepts = [
+      { code: 'TAMIL', aliases: ['TAMIL', 'TAM'], name: 'Department of Tamil', courseCode: 'BA_TAM', courseName: 'B.A. Tamil', level: 'UG' },
+      { code: 'ENG', aliases: ['ENG', 'ENGLISH'], name: 'Department of English', courseCode: 'BA_ENG', courseName: 'B.A. English', level: 'UG' },
+      { code: 'PHY', aliases: ['PHY', 'PHYSICS'], name: 'Department of Physics', courseCode: 'BSC_PHY', courseName: 'B.Sc Physics', level: 'UG' },
+      { code: 'MATH', aliases: ['MATH', 'MATHEMATICS'], name: 'Department of Mathematics', courseCode: 'BSC_MATH', courseName: 'B.Sc Mathematics', level: 'UG' },
+      { code: 'HIST', aliases: ['HIST', 'HISTORY'], name: 'Department of History', courseCode: 'BA_HIST', courseName: 'B.A. History', level: 'UG' },
+      { code: 'CS', aliases: ['CS'], name: 'Department of Computer Science', courseCode: 'BSC_CS', courseName: 'B.Sc Computer Science', level: 'UG' },
+      { code: 'BCA', aliases: ['BCA', 'CA'], name: 'Department of Computer Applications (BCA)', courseCode: 'BCA', courseName: 'BCA', level: 'UG' },
+      { code: 'AIML', aliases: ['AIML', 'AI_ML', 'AI&ML'], name: 'Department of AI & Machine Learning', courseCode: 'BSC_AIML', courseName: 'B.Sc AI & ML', level: 'UG' },
+      { code: 'BBA', aliases: ['BBA'], name: 'Department of Business Administration (BBA)', courseCode: 'BBA', courseName: 'BBA', level: 'UG' },
+      { code: 'BCOM', aliases: ['BCOM', 'COMM'], name: 'Department of Commerce (B.Com)', courseCode: 'BCOM', courseName: 'B.Com', level: 'UG' },
+      { code: 'BCOMCA', aliases: ['BCOMCA', 'BCOM_CA'], name: 'Department of Commerce (CA)', courseCode: 'BCOM_CA', courseName: 'B.Com (CA)', level: 'UG' },
+      { code: 'MCOM', aliases: ['MCOM'], name: 'Department of Commerce (M.Com)', courseCode: 'MCOM', courseName: 'M.Com', level: 'PG' },
+      { code: 'MBA', aliases: ['MBA'], name: 'Department of Management Studies (MBA)', courseCode: 'MBA', courseName: 'MBA', level: 'PG' },
+      { code: 'MSCCS', aliases: ['MSCCS', 'MSC_CS'], name: 'Department of Computer Science (M.Sc CS)', courseCode: 'MSC_CS', courseName: 'M.Sc Computer Science', level: 'PG' }
+    ];
+
+    const findDeptByCode = db.prepare('SELECT id, code, name FROM departments WHERE code = ?');
+    const updateDept = db.prepare('UPDATE departments SET code = ?, name = ? WHERE id = ?');
+    const insertDept = db.prepare('INSERT INTO departments (code, name) VALUES (?, ?)');
+
+    const findCourseByCode = db.prepare('SELECT id, code, name FROM courses WHERE code = ?');
+    const insertCourse = db.prepare('INSERT INTO courses (department_id, code, name, degree_level) VALUES (?, ?, ?, ?)');
+
+    const findClass = db.prepare('SELECT id FROM classes WHERE course_id = ? AND name = ?');
+    const insertClass = db.prepare('INSERT INTO classes (course_id, name, academic_year, semester, section) VALUES (?, ?, ?, ?, ?)');
+
+    const currentYear = '2026-2027';
+
+    for (const item of officialDepts) {
+      // Find existing by primary code or aliases
+      let existingDept = null;
+      for (const alias of item.aliases) {
+        existingDept = findDeptByCode.get(alias);
+        if (existingDept) break;
+      }
+
+      let deptId;
+      if (existingDept) {
+        deptId = existingDept.id;
+        updateDept.run(item.code, item.name, deptId);
+      } else {
+        const ins = insertDept.run(item.code, item.name);
+        deptId = Number(ins.lastInsertRowid);
+      }
+
+      // Course
+      let course = findCourseByCode.get(item.courseCode);
+      let courseId;
+      if (course) {
+        courseId = course.id;
+        db.prepare('UPDATE courses SET department_id = ?, name = ?, degree_level = ? WHERE id = ?')
+          .run(deptId, item.courseName, item.level, courseId);
+      } else {
+        const cIns = insertCourse.run(deptId, item.courseCode, item.courseName, item.level);
+        courseId = Number(cIns.lastInsertRowid);
+      }
+
+      // Academic Year Classes
+      if (item.level === 'UG') {
+        const ugClasses = [
+          { name: `I ${item.courseName} - A`, sem: 1 },
+          { name: `II ${item.courseName} - A`, sem: 3 },
+          { name: `III ${item.courseName} - A`, sem: 5 }
+        ];
+        for (const cls of ugClasses) {
+          const cRow = findClass.get(courseId, cls.name);
+          if (!cRow) {
+            insertClass.run(courseId, cls.name, currentYear, cls.sem, 'A');
+          }
+        }
+      } else {
+        const pgClasses = [
+          { name: `I ${item.courseName} - A`, sem: 1 },
+          { name: `II ${item.courseName} - A`, sem: 3 }
+        ];
+        for (const cls of pgClasses) {
+          const cRow = findClass.get(courseId, cls.name);
+          if (!cRow) {
+            insertClass.run(courseId, cls.name, currentYear, cls.sem, 'A');
+          }
+        }
+      }
+    }
+
+    console.log(`Successfully verified and configured ${officialDepts.length} official KCAS departments, courses, and classes!`);
+  } catch (err) {
+    console.error('Error in ensureKCASDepartments:', err);
+  }
+}
+
 // Initialize on require
 initSchema();
 seedDatabase();
 cleanupDummyData();
 ensureAdminCredentials();
+ensureKCASDepartments();
 
 module.exports = {
   db,

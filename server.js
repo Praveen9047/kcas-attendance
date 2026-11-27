@@ -352,7 +352,13 @@ const server = http.createServer(async (req, res) => {
 
           // Departments, Classes & Subjects available for logging
           const departments = db.prepare('SELECT id, code, name FROM departments ORDER BY name ASC').all();
-          const classes = db.prepare('SELECT id, name, section, semester FROM classes ORDER BY name ASC').all();
+          const classes = db.prepare(`
+            SELECT cl.id, cl.name, cl.section, cl.semester, co.department_id, d.name as department_name
+            FROM classes cl
+            JOIN courses co ON cl.course_id = co.id
+            JOIN departments d ON co.department_id = d.id
+            ORDER BY cl.name ASC
+          `).all();
           const subjects = db.prepare('SELECT id, code, name FROM subjects ORDER BY name ASC').all();
 
           // Today's Period Logs submitted by this staff member
@@ -1330,7 +1336,7 @@ const server = http.createServer(async (req, res) => {
             ORDER BY c.name ASC
           `).all();
           const classes = db.prepare(`
-            SELECT cl.*, co.name as course_name, co.degree_level, d.name as department_name
+            SELECT cl.*, co.name as course_name, co.degree_level, co.department_id, d.name as department_name
             FROM classes cl
             JOIN courses co ON cl.course_id = co.id
             JOIN departments d ON co.department_id = d.id
