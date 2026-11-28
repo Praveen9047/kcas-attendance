@@ -6,8 +6,8 @@
   <title>KCAS Attendance & College Management System | Krishna College of Arts and Science</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="css/style.css?v=1.1.1">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#B91C1C">
   <meta name="mobile-web-app-capable" content="yes">
@@ -107,25 +107,6 @@
             <span>Sign In to Dashboard</span>
           </button>
         </form>
-
-        <!-- Quick 1-Click Login for HOD, Staff & Master Admin -->
-        <div style="margin-top:18px; padding-top:14px; border-top:1px dashed #FECDD3;">
-          <p style="font-size:11px; font-weight:700; color:#64748B; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Quick 1-Click Role Sign In:</p>
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('KRISHNACOLLEGEADMIN', 'KCASCOLLEGE2027')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
-              <span>👑 <strong>Master Admin:</strong> Principal / Administrator</span>
-              <span style="font-size:10px; color:#B91C1C; font-weight:700;">Admin ➔</span>
-            </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('hod_cs', 'KcasHod2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
-              <span>🎓 <strong>HOD Login:</strong> Dr. K. Ramesh (Computer Science)</span>
-              <span style="font-size:10px; color:#B91C1C; font-weight:700;">HOD ➔</span>
-            </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="App.fillDemo('staff_cs', 'KcasStaff2026')" style="justify-content:space-between; font-size:12px; padding:7px 12px; border-color:#FECDD3; background:#FEF2F2;">
-              <span>👨‍🏫 <strong>Staff Login:</strong> Prof. S. Saravanan (Assistant Professor)</span>
-              <span style="font-size:10px; color:#B91C1C; font-weight:700;">Staff ➔</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -225,6 +206,7 @@
         <div id="staffActiveLeaveBanner" style="display:none; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:10px 14px; font-size:12px; color:#1E40AF;">
           <strong>ℹ️ Active Leave:</strong> You have an approved leave scheduled for today.
         </div>
+        <div id="staffMyLeavesList" style="margin-top:12px;"></div>
       </div>
 
       <!-- Interactive Monthly Attendance Calendar -->
@@ -424,9 +406,12 @@
             </div>
           </div>
 
-          <div style="text-align:right;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn btn-primary btn-sm" onclick="App.triggerStaffDailyCheckIn()">
-              <span>📸 HOD Daily Attendance</span>
+              <span>📸 Check In</span>
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="App.triggerStaffDailyCheckOut()">
+              <span>📸 Check Out</span>
             </button>
           </div>
         </div>
@@ -1450,18 +1435,18 @@
       </div>
       <div style="font-size:13px; color:#0F172A; display:flex; flex-direction:column; gap:8px;">
         <div><strong>Application Name:</strong> KCAS Attendance</div>
-        <div><strong>Current Version:</strong> 1.1.0 (Release Build 3)</div>
-        <div><strong>Developer:</strong> Google DeepMind & KCAS IT Cell</div>
-        <div><strong>Last Updated:</strong> November 27, 2026</div>
-        <div><strong>Release Notes (v1.1.0):</strong>
+        <div><strong>Current Version:</strong> 1.1.1 (Release Build 4)</div>
+        <div><strong>Developer:</strong> KCAS IT Cell & Engineering Team</div>
+        <div><strong>Last Updated:</strong> November 28, 2026</div>
+        <div><strong>Release Notes (v1.1.1):</strong>
           <ul style="padding-left:18px; margin-top:4px; font-size:12px; color:#475569;">
+            <li>Turbo Gzip compression, RAM caching & image compression for fast mobile loading.</li>
             <li>Dedicated HOD Dashboard with department isolation.</li>
             <li>Master Admin 8-metric dashboard & 10 quick actions.</li>
             <li>Interactive color-coded monthly attendance calendar.</li>
             <li>Comprehensive Staff Leave Management (CL, ML, OD, PER).</li>
             <li>100-meter GPS Campus Restriction + Biometric Face Auth.</li>
             <li>Class Period Duty Submission with Blackboard photo proof.</li>
-            <li>14 official departments & 42 class degrees.</li>
           </ul>
         </div>
       </div>
@@ -1582,10 +1567,8 @@ kcas_cs_staff2,Dr. M. Mohan,mohan@kcas.edu.in,staff,kcas123"></textarea>
   </nav>
 
   <!-- Scripts -->
-  <script src="js/qrcode.js"></script>
-  <script src="js/qrscanner.js"></script>
-  <script src="js/charts.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/charts.js?v=1.1.1" defer></script>
+  <script src="js/api.js?v=1.1.1" defer></script>
+  <script src="js/app.js?v=1.1.1" defer></script>
 </body>
 </html>

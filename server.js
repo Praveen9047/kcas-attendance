@@ -3,6 +3,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const zlib = require('node:zlib');
 const { db, hashPassword, verifyPassword, logAudit } = require('./db.js');
 
 // Pre-flight safeguard: Ensure photo_url and required columns exist
@@ -164,19 +165,36 @@ function clearLoginAttempts(ip) {
   loginAttempts.delete(ip);
 }
 
-// Send JSON response with production security headers
+// In-memory cache for static files (eliminates repeated disk reads & re-compression)
+const staticFileCache = new Map();
+
+// Send JSON response with optional gzip compression and security headers
 function sendJson(res, statusCode, data) {
-  res.writeHead(statusCode, {
+  const jsonStr = JSON.stringify(data);
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Vary': 'Accept-Encoding',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin'
-  });
-  res.end(JSON.stringify(data));
+  };
+
+  if (res._acceptGzip && jsonStr.length > 1024) {
+    try {
+      const compressed = zlib.gzipSync(jsonStr, { level: 6 });
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = compressed.length;
+      res.writeHead(statusCode, headers);
+      return res.end(compressed);
+    } catch (e) {}
+  }
+
+  res.writeHead(statusCode, headers);
+  res.end(jsonStr);
 }
 
 // Send Error response
@@ -209,6 +227,7 @@ const MIME_TYPES = {
 // Main HTTP request handler
 const server = http.createServer(async (req, res) => {
   const clientIp = req.socket.remoteAddress || '127.0.0.1';
+  res._acceptGzip = /\bgzip\b/i.test(req.headers['accept-encoding'] || '');
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -230,6 +249,11 @@ const server = http.createServer(async (req, res) => {
     // -------------------------------------------------------------
     if (pathname.startsWith('/api/')) {
 
+      // Fast Health Check / Warm-up Endpoint
+      if (pathname === '/api/health' && req.method === 'GET') {
+        return sendJson(res, 200, { success: true, status: 'ok', version: '1.1.1', timestamp: Date.now() });
+      }
+
       // PUBLIC / AUTH
       if (pathname === '/api/auth/login' && req.method === 'POST') {
         const rateCheck = checkRateLimit(clientIp);
@@ -245,6 +269,7 @@ const server = http.createServer(async (req, res) => {
 
         const user = db.prepare(`
           SELECT u.id, u.username, u.password_hash, u.salt, u.role, u.full_name, u.email, u.phone, u.photo_url,
+                 u.photo_url as profile_photo,
                  u.department_id, u.class_id, u.register_number, u.designation, u.is_active,
                  d.name as department_name, c.name as class_name
           FROM users u
@@ -357,13 +382,22 @@ const server = http.createServer(async (req, res) => {
         if (pathname === '/api/staff/dashboard' && req.method === 'GET') {
           const today = new Date().toISOString().split('T')[0];
 
+          const staffUserRow = db.prepare(`
+            SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone, u.photo_url,
+                   u.photo_url as profile_photo, u.designation, u.department_id,
+                   d.name as department_name, d.code as department_code
+            FROM users u
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.id = ?
+          `).get(auth.id);
+
           // Today's Check-in Status
           const todayAttendance = db.prepare('SELECT * FROM staff_attendance WHERE staff_id = ? AND date = ?').get(auth.id, today);
 
           // Departments, Classes & Subjects available for logging
           const departments = db.prepare('SELECT id, code, name FROM departments ORDER BY name ASC').all();
           const classes = db.prepare(`
-            SELECT cl.id, cl.name, cl.section, cl.semester, co.department_id, d.name as department_name
+            SELECT cl.id, cl.name, cl.section, cl.semester, co.department_id, co.degree_level as degree, d.name as department_name
             FROM classes cl
             JOIN courses co ON cl.course_id = co.id
             JOIN departments d ON co.department_id = d.id
@@ -374,7 +408,7 @@ const server = http.createServer(async (req, res) => {
           // Today's Period Logs submitted by this staff member
           const myTodayLogs = db.prepare(`
             SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
-                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.lesson_photo as photo_proof, s.created_at,
                    d.name as department_name, d.code as department_code,
                    c.name as class_name,
                    sub.name as subject_name, sub.code as subject_code
@@ -435,7 +469,7 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, {
             success: true,
             today,
-            user: auth,
+            user: staffUserRow || auth,
             todayAttendance: todayAttendance || null,
             today_check_in: todayAttendance || null,
             departments,
@@ -462,7 +496,16 @@ const server = http.createServer(async (req, res) => {
         // Staff / HOD Logs Class Period Activity & Lesson Photo Proof
         if (pathname === '/api/staff/period-log' && req.method === 'POST') {
           const body = await parseJsonBody(req);
-          const { departmentId, classId, subjectId, subjectName, periodNumber, startTime, endTime, lessonTopic, lessonSummary, lessonPhoto } = body;
+          let departmentId = body.departmentId || body.department_id;
+          let classId = body.classId || body.class_id;
+          const subjectId = body.subjectId || body.subject_id;
+          const subjectName = body.subjectName || body.subject_name;
+          const periodNumber = body.periodNumber || body.period_number;
+          const startTime = body.startTime || body.period_time;
+          const endTime = body.endTime;
+          const lessonTopic = body.lessonTopic || body.lesson_topic;
+          const lessonSummary = body.lessonSummary || body.lesson_summary;
+          const lessonPhoto = body.lessonPhoto || body.photo_proof;
 
           if (!periodNumber) {
             return sendError(res, 400, 'Period / Hour number is required');
@@ -471,12 +514,33 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 400, 'Please enter lesson topic or activity notes of what was done in this period');
           }
 
+          const today = new Date().toISOString().split('T')[0];
+          const period = parseInt(periodNumber, 10);
+
+          // Prevent duplicate period submissions for same day unless admin
+          if (auth.role !== 'admin') {
+            const dup = db.prepare('SELECT id FROM attendance_sessions WHERE staff_id = ? AND date = ? AND period_number = ?').get(auth.id, today, period);
+            if (dup) {
+              return sendError(res, 409, `Period ${period} class duty has already been submitted today.`);
+            }
+          }
+
+          // Resolve departmentId / classId by name if numeric IDs were omitted
+          if (!departmentId && (body.department_name || body.departmentName)) {
+            const dName = (body.department_name || body.departmentName).trim();
+            const dRow = db.prepare('SELECT id FROM departments WHERE lower(name) = lower(?)').get(dName);
+            if (dRow) departmentId = dRow.id;
+          }
+          if (!classId && (body.class_name || body.className)) {
+            const cName = (body.class_name || body.className).trim();
+            const cRow = db.prepare('SELECT id FROM classes WHERE lower(name) = lower(?)').get(cName);
+            if (cRow) classId = cRow.id;
+          }
+
           const sessionUuid = crypto.randomUUID();
           const qrSecret = crypto.randomBytes(16).toString('hex');
-          const today = new Date().toISOString().split('T')[0];
           const start = startTime || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
           const end = endTime || '';
-          const period = parseInt(periodNumber, 10);
 
           let resolvedSubjectId = subjectId ? parseInt(subjectId, 10) : null;
           if (!resolvedSubjectId && subjectName && subjectName.trim()) {
@@ -518,11 +582,11 @@ const server = http.createServer(async (req, res) => {
             lessonPhoto || null
           );
 
-          logAudit(auth.id, auth.username, 'LOG_PERIOD_DUTY', 'attendance_sessions', resInsert.lastInsertRowid, `Logged Period ${period} teaching activity with photo proof`, clientIp);
+          logAudit(auth.id, auth.username, 'LOG_PERIOD_DUTY', 'attendance_sessions', resInsert.lastInsertRowid, `Logged Period ${period} teaching activity`, clientIp);
 
           return sendJson(res, 201, {
             success: true,
-            message: `Period ${period} teaching activity logged successfully with photo proof!`,
+            message: `Period ${period} class duty logged successfully!`,
             sessionId: resInsert.lastInsertRowid
           });
         }
@@ -531,8 +595,8 @@ const server = http.createServer(async (req, res) => {
         if (pathname === '/api/staff/my-period-logs' && req.method === 'GET') {
           const date = parsedUrl.searchParams.get('date') || new Date().toISOString().split('T')[0];
           const logs = db.prepare(`
-            SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
-                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+            SELECT s.id, s.session_uuid, s.date, s.start_time, s.start_time as period_time, s.end_time, s.period_number,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.lesson_photo as photo_proof, s.created_at,
                    d.name as department_name, d.code as department_code,
                    c.name as class_name,
                    sub.name as subject_name, sub.code as subject_code
@@ -1040,16 +1104,28 @@ const server = http.createServer(async (req, res) => {
         // HOD Dashboard Overview
         if (pathname === '/api/hod/dashboard' && req.method === 'GET') {
           const today = new Date().toISOString().split('T')[0];
+          const curMonth = today.substring(0, 7);
           const dept = db.prepare('SELECT id, code, name FROM departments WHERE id = ?').get(hodDeptId);
 
           if (!dept) {
             return sendError(res, 404, 'Department not assigned to HOD');
           }
 
+          const hodUserRow = db.prepare(`
+            SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone,
+                   u.photo_url, u.photo_url as profile_photo, u.designation, u.department_id,
+                   d.name as department_name
+            FROM users u
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.id = ?
+          `).get(auth.id);
+
           // Department Staff
           const staffList = db.prepare(`
-            SELECT u.id, u.username, u.full_name, u.email, u.phone, u.designation, u.photo_url, u.is_active,
-                   sa.check_in_time, sa.check_out_time, sa.status as attendance_status,
+            SELECT u.id, u.username, u.full_name, u.email, u.phone, u.designation,
+                   u.photo_url, u.photo_url as profile_photo, u.is_active,
+                   sa.check_in_time, sa.check_out_time, COALESCE(sa.status, 'not_checked_in') as status,
+                   sa.status as attendance_status,
                    sa.check_in_gps_verified, sa.check_in_face_verified
             FROM users u
             LEFT JOIN staff_attendance sa ON sa.staff_id = u.id AND sa.date = ?
@@ -1080,41 +1156,84 @@ const server = http.createServer(async (req, res) => {
           }
           const absentToday = Math.max(0, totalStaff - presentToday - onLeaveToday);
 
-          // Today's Duty submissions from department staff
+          // Today's Duty submissions from department staff or within department
           const todayDutyLogs = db.prepare(`
-            SELECT s.id, s.period_number, s.start_time, s.end_time, s.lesson_topic, s.lesson_summary, s.lesson_photo,
+            SELECT s.id, s.period_number, s.start_time, s.end_time, s.lesson_topic, s.lesson_summary,
+                   s.lesson_photo, s.lesson_photo as photo_proof,
                    u.full_name as staff_name, c.name as class_name, sub.name as subject_name
             FROM attendance_sessions s
             JOIN users u ON s.staff_id = u.id
             LEFT JOIN classes c ON s.class_id = c.id
             LEFT JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.department_id = ? AND s.date = ?
+            WHERE (s.department_id = ? OR u.department_id = ?) AND s.date = ?
             ORDER BY s.period_number ASC
-          `).all(dept.id, today);
+          `).all(dept.id, dept.id, today);
 
           // Pending leave requests for department staff
           const pendingLeaves = db.prepare(`
-            SELECT lr.*, u.full_name as staff_name, u.designation
+            SELECT lr.*, u.full_name as staff_name, u.username as staff_username, u.designation, u.role
             FROM leave_requests lr
             JOIN users u ON lr.staff_id = u.id
             WHERE u.department_id = ? AND lr.status = 'pending'
             ORDER BY lr.id DESC
           `).all(dept.id);
 
+          // Monthly Department Attendance Performance Report
+          const totalDaysPassed = Math.max(1, parseInt(today.substring(8, 10), 10));
+          const monthlyStats = db.prepare(`
+            SELECT staff_id,
+                   SUM(CASE WHEN check_in_time IS NOT NULL THEN 1 ELSE 0 END) as present_days,
+                   SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_days
+            FROM staff_attendance
+            WHERE date LIKE ?
+            GROUP BY staff_id
+          `).all(`${curMonth}%`);
+          const statsMap = new Map(monthlyStats.map(m => [m.staff_id, m]));
+
+          const monthlyReport = staffList.map(st => {
+            const m = statsMap.get(st.id) || { present_days: 0, late_days: 0 };
+            const pres = Number(m.present_days || 0);
+            const late = Number(m.late_days || 0);
+            const abs = Math.max(0, totalDaysPassed - pres);
+            const rate = Math.min(100, Math.round((pres / totalDaysPassed) * 100));
+            return {
+              staff_id: st.id,
+              full_name: st.full_name,
+              designation: st.designation,
+              present_days: pres,
+              absent_days: abs,
+              late_days: late,
+              attendance_rate: rate
+            };
+          });
+
+          const metricsObj = {
+            totalStaff,
+            total_staff: totalStaff,
+            presentToday,
+            present_today: presentToday,
+            absentToday,
+            absent_today: absentToday,
+            lateToday,
+            late_arrivals: lateToday,
+            onLeaveToday,
+            currentlyWorking,
+            working_now: currentlyWorking
+          };
+
           return sendJson(res, 200, {
             success: true,
+            hod: hodUserRow || auth,
             department: dept,
-            metrics: {
-              totalStaff,
-              presentToday,
-              absentToday,
-              lateToday,
-              onLeaveToday,
-              currentlyWorking
-            },
+            metrics: metricsObj,
             staffList,
+            department_staff: staffList,
             todayDutyLogs,
+            today_duties: todayDutyLogs,
             pendingLeaves,
+            pending_leaves: pendingLeaves,
+            monthlyReport,
+            monthly_report: monthlyReport,
             activeLeaves
           });
         }
@@ -1251,7 +1370,8 @@ const server = http.createServer(async (req, res) => {
           }
 
           let query = `
-            SELECT lr.*, u.full_name as staff_name, u.designation, d.name as department_name, d.id as department_id
+            SELECT lr.*, u.full_name as staff_name, u.username as staff_username, u.role, u.designation,
+                   d.name as department_name, d.id as department_id
             FROM leave_requests lr
             JOIN users u ON lr.staff_id = u.id
             LEFT JOIN departments d ON u.department_id = d.id
@@ -1495,7 +1615,11 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 403, 'Forbidden');
           }
           const body = await parseJsonBody(req);
-          const { title, message, targetRole, departmentId, type } = body;
+          const title = body.title;
+          const message = body.message;
+          const targetRole = body.targetRole || body.target_role;
+          const departmentId = body.departmentId || body.department_id;
+          const type = body.type;
           if (!title || !message) {
             return sendError(res, 400, 'Title and message are required');
           }
@@ -1625,8 +1749,8 @@ const server = http.createServer(async (req, res) => {
 
           // Staff & HOD Check-ins today
           const staffCheckIns = db.prepare(`
-            SELECT u.id, u.full_name, u.role, u.designation, d.name as department_name,
-                   sa.check_in_time, sa.check_out_time, sa.status, sa.working_hours,
+            SELECT u.id, u.username, u.full_name, u.role, u.designation, d.name as department_name,
+                   sa.check_in_time, sa.check_out_time, COALESCE(sa.status, 'not_checked_in') as status, sa.working_hours,
                    sa.check_in_gps_verified, sa.check_in_face_verified
             FROM users u
             LEFT JOIN departments d ON u.department_id = d.id
@@ -1646,18 +1770,22 @@ const server = http.createServer(async (req, res) => {
               recentActivities.push({
                 type: 'checkin',
                 icon: '⏱️',
+                user_name: c.full_name,
                 title: `${c.full_name} (${(c.role || 'staff').toUpperCase()}) Checked In`,
                 description: `${c.department_name || 'KCAS'} • Time: ${c.check_in_time} (${(c.status || 'on_time').toUpperCase()}) • GPS & Face Verified`,
-                timestamp: `${today} ${c.check_in_time}`
+                timestamp: `${today} ${c.check_in_time}`,
+                time: `${today} ${c.check_in_time}`
               });
             }
             if (c.check_out_time) {
               recentActivities.push({
                 type: 'checkout',
                 icon: '🚪',
+                user_name: c.full_name,
                 title: `${c.full_name} Checked Out`,
                 description: `Time: ${c.check_out_time} • Hours: ${c.working_hours || 0} hrs`,
-                timestamp: `${today} ${c.check_out_time}`
+                timestamp: `${today} ${c.check_out_time}`,
+                time: `${today} ${c.check_out_time}`
               });
             }
           }
@@ -1666,9 +1794,11 @@ const server = http.createServer(async (req, res) => {
             recentActivities.push({
               type: 'duty',
               icon: '📝',
+              user_name: d.staff_name,
               title: `${d.staff_name} logged Period ${d.period_number}`,
               description: `${d.class_name || 'Class'} • ${d.subject_name || 'Subject'} • ${d.lesson_topic || 'Duty notes'}`,
-              timestamp: `${d.date} ${d.start_time}`
+              timestamp: `${d.date} ${d.start_time}`,
+              time: `${d.date} ${d.start_time}`
             });
           }
 
@@ -1676,9 +1806,11 @@ const server = http.createServer(async (req, res) => {
             recentActivities.push({
               type: 'leave',
               icon: '🏖️',
+              user_name: l.staff_name,
               title: `${l.staff_name} on Approved Leave`,
               description: `${(l.leave_type || 'leave').toUpperCase()} leave (${l.from_date} to ${l.to_date})`,
-              timestamp: l.created_at || today
+              timestamp: l.created_at || today,
+              time: l.created_at || today
             });
           }
 
@@ -1687,9 +1819,11 @@ const server = http.createServer(async (req, res) => {
             recentActivities.push({
               type: 'audit',
               icon: '📜',
+              user_name: a.username,
               title: `Admin Action: ${a.action}`,
               description: `${a.username}: ${a.details}`,
-              timestamp: a.created_at
+              timestamp: a.created_at,
+              time: a.created_at
             });
           }
 
@@ -1700,21 +1834,31 @@ const server = http.createServer(async (req, res) => {
             today,
             stats: {
               totalStaff: staffCount,
+              total_staff: staffCount,
               totalHods: hodCount,
+              total_hods: hodCount,
               totalFaculty,
               presentToday,
+              present_today: presentToday,
               absentToday,
+              absent_today: absentToday,
               lateArrivals,
+              late_arrivals: lateArrivals,
               onLeave,
+              on_leave: onLeave,
               notCheckedIn,
+              not_checked_in: notCheckedIn,
               staffCurrentlyWorking,
+              currently_working: staffCurrentlyWorking,
               departmentsCount: deptCount,
               classesCount: classCount,
               pendingLeavesCount
             },
             staffCheckIns,
+            staff_attendance_today: staffCheckIns,
             todayDutyLogs,
             recentActivities: recentActivities.slice(0, 25),
+            recent_activities: recentActivities.slice(0, 25),
             recentLogs
           });
         }
@@ -1728,7 +1872,7 @@ const server = http.createServer(async (req, res) => {
 
           let query = `
             SELECT u.id, u.username, u.role, u.full_name, u.email, u.phone,
-                   u.parent_phone, u.address, u.photo_url,
+                   u.parent_phone, u.address, u.photo_url, u.photo_url as profile_photo,
                    u.department_id, u.class_id, u.register_number, u.designation, u.is_active, u.created_at,
                    d.name as department_name, d.code as department_code,
                    c.name as class_name
@@ -1763,10 +1907,22 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, users });
         }
 
-        // Create User (with Student Phone, Parent Phone, Address, Photo)
+        // Create User (Faculty Staff or HOD)
         if (pathname === '/api/admin/users' && req.method === 'POST') {
           const body = await parseJsonBody(req);
-          const { username, password, role, fullName, email, phone, parentPhone, address, photoUrl, departmentId, classId, registerNumber, designation } = body;
+          const username = body.username;
+          const password = body.password;
+          const role = body.role || 'staff';
+          const fullName = body.fullName || body.full_name;
+          const email = body.email;
+          const phone = body.phone;
+          const parentPhone = body.parentPhone || body.parent_phone;
+          const address = body.address;
+          const photoUrl = body.photoUrl || body.photo_url || body.profile_photo;
+          const departmentId = body.departmentId || body.department_id;
+          const classId = body.classId || body.class_id;
+          const registerNumber = body.registerNumber || body.register_number;
+          const designation = body.designation;
 
           if (!username || !password || !role || !fullName) {
             return sendError(res, 400, 'Username, password, role, and full name are required');
@@ -1781,15 +1937,15 @@ const server = http.createServer(async (req, res) => {
             return sendError(res, 409, `Username '${username}' is already taken`);
           }
 
-          const auth = hashPassword(password);
+          const pwdData = hashPassword(password);
           const stmt = db.prepare(`
             INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
           `);
           const resInsert = stmt.run(
             username.trim(),
-            auth.hash,
-            auth.salt,
+            pwdData.hash,
+            pwdData.salt,
             role,
             fullName.trim(),
             email || null,
@@ -1800,12 +1956,20 @@ const server = http.createServer(async (req, res) => {
             departmentId || null,
             classId || null,
             registerNumber ? registerNumber.trim().toUpperCase() : null,
-            designation || (role === 'student' ? 'Student' : 'Staff')
+            designation || (role === 'hod' ? 'Head of Department (HOD)' : 'Staff')
           );
 
-          logAudit(auth.id, auth.username, 'CREATE_USER', 'users', resInsert.lastInsertRowid, `Created ${role} account: ${username}`, clientIp);
+          const newUserId = Number(resInsert.lastInsertRowid);
+          if (role === 'staff' || role === 'hod') {
+            db.prepare(`
+              INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
+              VALUES (?, '2026-2027', 12, 10, 15, 6)
+            `).run(newUserId);
+          }
 
-          return sendJson(res, 201, { success: true, message: 'User created successfully', userId: resInsert.lastInsertRowid });
+          logAudit(auth.id, auth.username, 'CREATE_USER', 'users', newUserId, `Created ${role} account: ${username}`, clientIp);
+
+          return sendJson(res, 201, { success: true, message: 'User created successfully', userId: newUserId });
         }
 
         // Update User / Toggle Active Status
@@ -2156,12 +2320,13 @@ const server = http.createServer(async (req, res) => {
         if (pathname === '/api/admin/period-logs' && req.method === 'GET') {
           const date = parsedUrl.searchParams.get('date');
           const deptId = parsedUrl.searchParams.get('department_id');
+          const deptName = parsedUrl.searchParams.get('department_name');
           const staffId = parsedUrl.searchParams.get('staff_id');
-          const period = parsedUrl.searchParams.get('period');
+          const period = parsedUrl.searchParams.get('period') || parsedUrl.searchParams.get('period_number');
 
           let query = `
-            SELECT s.id, s.session_uuid, s.date, s.start_time, s.end_time, s.period_number,
-                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.created_at,
+            SELECT s.id, s.session_uuid, s.date, s.date as duty_date, s.start_time, s.end_time, s.period_number,
+                   s.lesson_topic, s.lesson_summary, s.lesson_photo, s.lesson_photo as photo_proof, s.created_at,
                    u.id as staff_id, u.full_name as staff_name, u.username as staff_username, u.designation as staff_designation,
                    d.name as department_name, d.code as department_code,
                    c.name as class_name,
@@ -2176,6 +2341,7 @@ const server = http.createServer(async (req, res) => {
           const params = [];
           if (date) { query += ' AND s.date = ?'; params.push(date); }
           if (deptId) { query += ' AND s.department_id = ?'; params.push(deptId); }
+          if (deptName) { query += ' AND d.name = ?'; params.push(deptName); }
           if (staffId) { query += ' AND s.staff_id = ?'; params.push(staffId); }
           if (period) { query += ' AND s.period_number = ?'; params.push(period); }
 
@@ -2335,43 +2501,60 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // Export Reports to CSV / Excel
+        // Export Staff & HOD Attendance Reports to CSV / Excel
         if (pathname === '/api/admin/reports/export' && req.method === 'GET') {
           const format = parsedUrl.searchParams.get('format') || 'csv';
           const fromDate = parsedUrl.searchParams.get('from_date');
           const toDate = parsedUrl.searchParams.get('to_date');
-          const classId = parsedUrl.searchParams.get('class_id');
-          const subjectId = parsedUrl.searchParams.get('subject_id');
+          const deptId = parsedUrl.searchParams.get('department_id');
+          const month = parsedUrl.searchParams.get('month');
 
           let query = `
-            SELECT s.date as Date, s.start_time as Time,
-                   u.register_number as "Reg No", u.full_name as "Student Name",
-                   c.name as Class, c.semester as Semester,
-                   sub.code as "Subject Code", sub.name as "Subject Name",
-                   t.full_name as "Faculty Name",
-                   upper(sa.status) as Status,
-                   sa.marked_at as "Marked At",
-                   sa.marked_by as "Marked Mode",
-                   CASE WHEN sa.location_verified = 1 THEN 'Yes' ELSE 'No' END as "Location Verified"
-            FROM student_attendance sa
-            JOIN attendance_sessions s ON sa.session_id = s.id
-            JOIN users u ON sa.student_id = u.id
-            JOIN classes c ON s.class_id = c.id
-            JOIN subjects sub ON s.subject_id = sub.id
-            JOIN users t ON s.staff_id = t.id
+            SELECT sa.date as Date,
+                   u.username as "Staff ID",
+                   u.full_name as "Faculty Name",
+                   upper(u.role) as Role,
+                   COALESCE(u.designation, '-') as Designation,
+                   COALESCE(d.name, '-') as Department,
+                   COALESCE(sa.check_in_time, '-') as "Check In",
+                   COALESCE(sa.check_out_time, '-') as "Check Out",
+                   COALESCE(sa.working_hours, 0) as "Working Hours",
+                   upper(COALESCE(sa.status, 'absent')) as Status,
+                   CASE WHEN sa.check_in_gps_verified = 1 THEN 'Yes (100m)' ELSE 'No' END as "GPS Verified",
+                   CASE WHEN sa.check_in_face_verified = 1 THEN 'Yes' ELSE 'No' END as "Face Verified"
+            FROM staff_attendance sa
+            JOIN users u ON sa.staff_id = u.id
+            LEFT JOIN departments d ON u.department_id = d.id
             WHERE 1=1
           `;
           const params = [];
-          if (fromDate) { query += ' AND s.date >= ?'; params.push(fromDate); }
-          if (toDate) { query += ' AND s.date <= ?'; params.push(toDate); }
-          if (classId) { query += ' AND c.id = ?'; params.push(classId); }
-          if (subjectId) { query += ' AND sub.id = ?'; params.push(subjectId); }
+          if (fromDate) { query += ' AND sa.date >= ?'; params.push(fromDate); }
+          if (toDate) { query += ' AND sa.date <= ?'; params.push(toDate); }
+          if (month) { query += ' AND sa.date LIKE ?'; params.push(`${month}%`); }
+          if (deptId) { query += ' AND u.department_id = ?'; params.push(deptId); }
 
-          query += ' ORDER BY s.date DESC, u.register_number ASC';
-          const rows = db.prepare(query).all(...params);
+          query += ' ORDER BY sa.date DESC, u.full_name ASC';
+          let rows = db.prepare(query).all(...params);
 
           if (rows.length === 0) {
-            return sendError(res, 404, 'No attendance records found matching filters');
+            rows = db.prepare(`
+              SELECT date('now','localtime') as Date,
+                     u.username as "Staff ID",
+                     u.full_name as "Faculty Name",
+                     upper(u.role) as Role,
+                     COALESCE(u.designation, '-') as Designation,
+                     COALESCE(d.name, '-') as Department,
+                     '-' as "Check In",
+                     '-' as "Check Out",
+                     0 as "Working Hours",
+                     'NOT_CHECKED_IN' as Status,
+                     'No' as "GPS Verified",
+                     'No' as "Face Verified"
+              FROM users u
+              LEFT JOIN departments d ON u.department_id = d.id
+              WHERE u.role IN ('staff', 'hod') AND u.is_active = 1
+              ORDER BY u.full_name ASC
+            `).all();
           }
 
           const headers = Object.keys(rows[0]);
@@ -2446,12 +2629,18 @@ const server = http.createServer(async (req, res) => {
         // Fallback to index.html for SPA routing if path doesn't have an extension
         if (!path.extname(pathname)) {
           filePath = path.join(__dirname, 'public', 'index.html');
-          return serveFile(filePath, res);
+          return fs.stat(filePath, (sErr, sStats) => {
+            if (sErr) {
+              res.writeHead(404);
+              return res.end('Not Found');
+            }
+            return serveFile(filePath, res, sStats);
+          });
         }
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('404 Not Found');
       }
-      serveFile(filePath, res);
+      serveFile(filePath, res, stats);
     });
 
   } catch (err) {
@@ -2460,24 +2649,55 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function serveFile(filePath, res) {
+function serveFile(filePath, res, stats = null) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+  const baseName = path.basename(filePath);
+  const isMutableEntry = baseName === 'index.html' || baseName === 'sw.js';
+  const cacheControl = isMutableEntry ? 'no-cache, must-revalidate' : 'public, max-age=86400';
+
+  const sendEntry = (entry) => {
+    const headers = {
+      'Content-Type': entry.contentType,
+      'Cache-Control': cacheControl,
+      'Vary': 'Accept-Encoding',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
+    };
+    if (res._acceptGzip && entry.gzip) {
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = entry.gzip.length;
+      res.writeHead(200, headers);
+      return res.end(entry.gzip);
+    }
+    headers['Content-Length'] = entry.raw.length;
+    res.writeHead(200, headers);
+    return res.end(entry.raw);
+  };
+
+  const cached = staticFileCache.get(filePath);
+  if (cached && (!stats || cached.mtimeMs === stats.mtimeMs)) {
+    return sendEntry(cached);
+  }
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       return res.end('Error loading file');
     }
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Cache-Control': 'no-cache, must-revalidate',
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
-    });
-    res.end(content);
+    const compressible = ['.html', '.css', '.js', '.json', '.svg'].includes(ext) && content.length > 1024;
+    const entry = {
+      raw: content,
+      gzip: compressible ? zlib.gzipSync(content, { level: 6 }) : null,
+      contentType,
+      mtimeMs: stats ? stats.mtimeMs : Date.now()
+    };
+    if (content.length < 2 * 1024 * 1024) {
+      staticFileCache.set(filePath, entry);
+    }
+    sendEntry(entry);
   });
 }
 

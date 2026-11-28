@@ -14,8 +14,11 @@ if (!fs.existsSync(dataDir)) {
 
 const db = new DatabaseSync(DB_PATH);
 
-// Enable WAL mode and foreign keys for performance and integrity
+// Enable WAL mode, memory cache, and foreign keys for maximum performance and integrity
 db.exec('PRAGMA journal_mode = WAL;');
+db.exec('PRAGMA synchronous = NORMAL;');
+db.exec('PRAGMA cache_size = -16000;');
+db.exec('PRAGMA temp_store = MEMORY;');
 db.exec('PRAGMA foreign_keys = ON;');
 
 // Helper to hash passwords securely using scrypt
@@ -396,6 +399,18 @@ function runMigrations() {
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('morning_checkin_end', '10:00', 'Morning check-in cutoff time')").run();
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('evening_checkout_start', '15:30', 'Evening check-out start time')").run();
     db.prepare("INSERT OR IGNORE INTO settings (key, value, description) VALUES ('evening_checkout_end', '17:30', 'Evening check-out cutoff time')").run();
+
+    // 7. Performance Indexes for instant queries
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, is_active);
+      CREATE INDEX IF NOT EXISTS idx_users_dept ON users(department_id);
+      CREATE INDEX IF NOT EXISTS idx_staff_att_staff_date ON staff_attendance(staff_id, date);
+      CREATE INDEX IF NOT EXISTS idx_staff_att_date ON staff_attendance(date);
+      CREATE INDEX IF NOT EXISTS idx_sessions_staff_date ON attendance_sessions(staff_id, date);
+      CREATE INDEX IF NOT EXISTS idx_sessions_dept_date ON attendance_sessions(department_id, date);
+      CREATE INDEX IF NOT EXISTS idx_leaves_staff_status ON leave_requests(staff_id, status);
+      CREATE INDEX IF NOT EXISTS idx_notif_user_read ON notifications(user_id, is_read);
+    `);
   } catch (err) {
     console.error('Migration error:', err);
   }
@@ -573,42 +588,38 @@ function cleanupDummyData() {
   }
 }
 
-// Ensure the specified Admin credentials are always up to date and strictly single admin
+// Ensure the specified Admin credentials are always active and strictly single admin
 function ensureAdminCredentials() {
-  const adminAuth = hashPassword('KCASCOLLEGE2027');
-
   // Purge any extra admin accounts
   db.prepare("DELETE FROM users WHERE role = 'admin' AND upper(username) != 'KRISHNACOLLEGEADMIN'").run();
 
   const existing = db.prepare(`
-    SELECT id, username FROM users WHERE upper(username) = 'KRISHNACOLLEGEADMIN'
+    SELECT id, username, is_active FROM users WHERE upper(username) = 'KRISHNACOLLEGEADMIN'
   `).get();
   
   if (existing) {
-    db.prepare(`
-      UPDATE users 
-      SET username = 'KRISHNACOLLEGEADMIN',
-          password_hash = ?,
-          salt = ?,
-          role = 'admin',
-          is_active = 1,
-          full_name = 'Principal & Administrator (KCAS)',
-          email = 'admin@kcas.edu.in',
-          phone = '9842411001',
-          designation = 'College Administrator'
-      WHERE id = ?
-    `).run(adminAuth.hash, adminAuth.salt, existing.id);
-  } else {
-    db.prepare(`
-      INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, designation, is_active)
-      VALUES ('KRISHNACOLLEGEADMIN', ?, ?, 'admin', 'Principal & Administrator (KCAS)', 'admin@kcas.edu.in', '9842411001', 'College Administrator', 1)
-    `).run(adminAuth.hash, adminAuth.salt);
+    if (!existing.is_active) {
+      db.prepare("UPDATE users SET is_active = 1 WHERE id = ?").run(existing.id);
+    }
+    return;
   }
+
+  const adminAuth = hashPassword('KCASCOLLEGE2027');
+  db.prepare(`
+    INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, designation, is_active)
+    VALUES ('KRISHNACOLLEGEADMIN', ?, ?, 'admin', 'Principal & Administrator (KCAS)', 'admin@kcas.edu.in', '9842411001', 'College Administrator', 1)
+  `).run(adminAuth.hash, adminAuth.salt);
 }
 
 // Ensure all 14 official KCAS Departments, Courses, and Classes
 function ensureKCASDepartments() {
   try {
+    const deptCount = db.prepare('SELECT COUNT(*) as c FROM departments').get().c;
+    const classCount = db.prepare('SELECT COUNT(*) as c FROM classes').get().c;
+    if (deptCount >= 14 && classCount >= 42) {
+      return; // Fast-path exit
+    }
+
     const officialDepts = [
       { code: 'TAMIL', aliases: ['TAMIL', 'TAM'], name: 'Department of Tamil', courseCode: 'BA_TAM', courseName: 'B.A. Tamil', level: 'UG' },
       { code: 'ENG', aliases: ['ENG', 'ENGLISH'], name: 'Department of English', courseCode: 'BA_ENG', courseName: 'B.A. English', level: 'UG' },
@@ -626,6 +637,7 @@ function ensureKCASDepartments() {
       { code: 'MSCCS', aliases: ['MSCCS', 'MSC_CS'], name: 'Department of Computer Science (M.Sc CS)', courseCode: 'MSC_CS', courseName: 'M.Sc Computer Science', level: 'PG' }
     ];
 
+    db.exec('BEGIN TRANSACTION;');
     const findDeptByCode = db.prepare('SELECT id, code, name FROM departments WHERE code = ?');
     const updateDept = db.prepare('UPDATE departments SET code = ?, name = ? WHERE id = ?');
     const insertDept = db.prepare('INSERT INTO departments (code, name) VALUES (?, ?)');
@@ -639,7 +651,6 @@ function ensureKCASDepartments() {
     const currentYear = '2026-2027';
 
     for (const item of officialDepts) {
-      // Find existing by primary code or aliases
       let existingDept = null;
       for (const alias of item.aliases) {
         existingDept = findDeptByCode.get(alias);
@@ -655,7 +666,6 @@ function ensureKCASDepartments() {
         deptId = Number(ins.lastInsertRowid);
       }
 
-      // Course
       let course = findCourseByCode.get(item.courseCode);
       let courseId;
       if (course) {
@@ -667,98 +677,64 @@ function ensureKCASDepartments() {
         courseId = Number(cIns.lastInsertRowid);
       }
 
-      // Academic Year Classes
-      if (item.level === 'UG') {
-        const ugClasses = [
-          { name: `I ${item.courseName} - A`, sem: 1 },
-          { name: `II ${item.courseName} - A`, sem: 3 },
-          { name: `III ${item.courseName} - A`, sem: 5 }
-        ];
-        for (const cls of ugClasses) {
-          const cRow = findClass.get(courseId, cls.name);
-          if (!cRow) {
-            insertClass.run(courseId, cls.name, currentYear, cls.sem, 'A');
-          }
-        }
-      } else {
-        const pgClasses = [
-          { name: `I ${item.courseName} - A`, sem: 1 },
-          { name: `II ${item.courseName} - A`, sem: 3 }
-        ];
-        for (const cls of pgClasses) {
-          const cRow = findClass.get(courseId, cls.name);
-          if (!cRow) {
-            insertClass.run(courseId, cls.name, currentYear, cls.sem, 'A');
-          }
+      const targetClasses = item.level === 'UG'
+        ? [
+            { name: `I ${item.courseName} - A`, sem: 1 },
+            { name: `II ${item.courseName} - A`, sem: 3 },
+            { name: `III ${item.courseName} - A`, sem: 5 }
+          ]
+        : [
+            { name: `I ${item.courseName} - A`, sem: 1 },
+            { name: `II ${item.courseName} - A`, sem: 3 }
+          ];
+
+      for (const cls of targetClasses) {
+        const cRow = findClass.get(courseId, cls.name);
+        if (!cRow) {
+          insertClass.run(courseId, cls.name, currentYear, cls.sem, 'A');
         }
       }
     }
-
-    console.log(`Successfully verified and configured ${officialDepts.length} official KCAS departments, courses, and classes!`);
+    db.exec('COMMIT;');
   } catch (err) {
+    try { db.exec('ROLLBACK;'); } catch (rErr) {}
     console.error('Error in ensureKCASDepartments:', err);
   }
 }
 
-// Ensure 1 Official Dummy HOD and 1 Official Dummy Staff for Testing
+// Ensure initial HOD and Staff only if missing
 function ensureDummyStaffAndHod() {
   try {
+    const existingHod = db.prepare("SELECT id FROM users WHERE username = 'hod_cs'").get();
+    const existingStaff = db.prepare("SELECT id FROM users WHERE username = 'staff_cs'").get();
+    if (existingHod && existingStaff) {
+      return; // Fast-path exit without overwriting or rehashing
+    }
+
     const csDept = db.prepare("SELECT id FROM departments WHERE code = 'CS'").get();
     const deptId = csDept ? csDept.id : null;
-
-    // 1. Single HOD Account
-    const hodAuth = hashPassword('KcasHod2026');
-    let hodId;
-    const existingHod = db.prepare("SELECT id FROM users WHERE username = 'hod_cs'").get();
-    if (existingHod) {
-      hodId = existingHod.id;
-      db.prepare(`
-        UPDATE users 
-        SET password_hash = ?, salt = ?, role = 'hod', is_active = 1,
-            full_name = 'Dr. K. Ramesh (HOD - Computer Science)',
-            email = 'hod.cs@kcas.edu.in', phone = '9842411002',
-            department_id = ?, designation = 'Associate Professor & HOD'
-        WHERE id = ?
-      `).run(hodAuth.hash, hodAuth.salt, deptId, hodId);
-    } else {
-      const hIns = db.prepare(`
-        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
-        VALUES ('hod_cs', ?, ?, 'hod', 'Dr. K. Ramesh (HOD - Computer Science)', 'hod.cs@kcas.edu.in', '9842411002', ?, 'Associate Professor & HOD', 1)
-      `).run(hodAuth.hash, hodAuth.salt, deptId);
-      hodId = Number(hIns.lastInsertRowid);
-    }
-
-    // 2. Single Staff Account
-    const staffAuth = hashPassword('KcasStaff2026');
-    let staffId;
-    const existingStaff = db.prepare("SELECT id FROM users WHERE username = 'staff_cs'").get();
-    if (existingStaff) {
-      staffId = existingStaff.id;
-      db.prepare(`
-        UPDATE users 
-        SET password_hash = ?, salt = ?, role = 'staff', is_active = 1,
-            full_name = 'Prof. S. Priya (Assistant Professor)',
-            email = 'staff.cs@kcas.edu.in', phone = '9842411003',
-            department_id = ?, designation = 'Assistant Professor'
-        WHERE id = ?
-      `).run(staffAuth.hash, staffAuth.salt, deptId, staffId);
-    } else {
-      const sIns = db.prepare(`
-        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
-        VALUES ('staff_cs', ?, ?, 'staff', 'Prof. S. Priya (Assistant Professor)', 'staff.cs@kcas.edu.in', '9842411003', ?, 'Assistant Professor', 1)
-      `).run(staffAuth.hash, staffAuth.salt, deptId);
-      staffId = Number(sIns.lastInsertRowid);
-    }
-
-    // Initialize default leave balances
     const insertBal = db.prepare(`
       INSERT OR IGNORE INTO leave_balances (staff_id, academic_year, casual_leave, medical_leave, on_duty, permissions)
       VALUES (?, '2026-2027', 12, 10, 15, 6)
     `);
-    if (hodId) insertBal.run(hodId);
-    if (staffId) insertBal.run(staffId);
 
-    console.log('Successfully created/verified 1 HOD (hod_cs) and 1 Staff (staff_cs) with active leave balances!');
+    if (!existingHod) {
+      const hodAuth = hashPassword('KcasHod2026');
+      const hIns = db.prepare(`
+        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
+        VALUES ('hod_cs', ?, ?, 'hod', 'Dr. K. Ramesh (HOD - Computer Science)', 'hod.cs@kcas.edu.in', '9842411002', ?, 'Associate Professor & HOD', 1)
+      `).run(hodAuth.hash, hodAuth.salt, deptId);
+      insertBal.run(Number(hIns.lastInsertRowid));
+    }
+
+    if (!existingStaff) {
+      const staffAuth = hashPassword('KcasStaff2026');
+      const sIns = db.prepare(`
+        INSERT INTO users (username, password_hash, salt, role, full_name, email, phone, department_id, designation, is_active)
+        VALUES ('staff_cs', ?, ?, 'staff', 'Prof. S. Priya (Assistant Professor)', 'staff.cs@kcas.edu.in', '9842411003', ?, 'Assistant Professor', 1)
+      `).run(staffAuth.hash, staffAuth.salt, deptId);
+      insertBal.run(Number(sIns.lastInsertRowid));
+    }
   } catch (err) {
     console.error('Error in ensureDummyStaffAndHod:', err);
   }
