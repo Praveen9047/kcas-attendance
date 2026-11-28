@@ -79,10 +79,13 @@ function initSchema() {
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       salt TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'staff', 'student')),
+      role TEXT NOT NULL CHECK(role IN ('admin', 'hod', 'staff', 'student')),
       full_name TEXT NOT NULL,
       email TEXT,
       phone TEXT,
+      parent_phone TEXT,
+      address TEXT,
+      photo_url TEXT,
       department_id INTEGER,
       class_id INTEGER,
       register_number TEXT,
@@ -288,50 +291,76 @@ function runMigrations() {
       );
     `);
 
-    // 2. Ensure users table allows 'hod' role
+    // 2. Ensure all user columns exist first
+    try {
+      const initialUserCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+      if (!initialUserCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
+      if (!initialUserCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
+      if (!initialUserCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
+    } catch (colErr) {
+      console.log('User column pre-migration note:', colErr.message);
+    }
+
+    // 3. Ensure users table allows 'hod' role
     try {
       db.prepare("INSERT INTO users (username, password_hash, salt, role, full_name) VALUES ('__temp_hod_probe__', 'h', 's', 'hod', 'Probe')").run();
       db.prepare("DELETE FROM users WHERE username = '__temp_hod_probe__'").run();
     } catch (e) {
-      db.exec('PRAGMA foreign_keys = OFF;');
-      db.exec(`
-        CREATE TABLE users_migrated (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          username TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          salt TEXT NOT NULL,
-          role TEXT NOT NULL CHECK(role IN ('admin', 'hod', 'staff', 'student')),
-          full_name TEXT NOT NULL,
-          email TEXT,
-          phone TEXT,
-          parent_phone TEXT,
-          address TEXT,
-          photo_url TEXT,
-          department_id INTEGER,
-          class_id INTEGER,
-          register_number TEXT,
-          designation TEXT,
-          is_active INTEGER DEFAULT 1,
-          created_at TEXT DEFAULT (datetime('now', 'localtime')),
-          FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
-          FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
-        );
+      console.log('Migrating users table check constraint to support HOD role...');
+      try {
+        db.exec('PRAGMA foreign_keys = OFF;');
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS users_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('admin', 'hod', 'staff', 'student')),
+            full_name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            parent_phone TEXT,
+            address TEXT,
+            photo_url TEXT,
+            department_id INTEGER,
+            class_id INTEGER,
+            register_number TEXT,
+            designation TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
+            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
+          );
+        `);
 
-        INSERT INTO users_migrated (id, username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active, created_at)
-        SELECT id, username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active, created_at
-        FROM users;
+        const curCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+        const parentPhoneExpr = curCols.includes('parent_phone') ? 'parent_phone' : 'NULL as parent_phone';
+        const addressExpr = curCols.includes('address') ? 'address' : 'NULL as address';
+        const photoUrlExpr = curCols.includes('photo_url') ? 'photo_url' : 'NULL as photo_url';
 
-        DROP TABLE users;
-        ALTER TABLE users_migrated RENAME TO users;
-      `);
-      db.exec('PRAGMA foreign_keys = ON;');
+        db.exec(`
+          INSERT INTO users_migrated (id, username, password_hash, salt, role, full_name, email, phone, parent_phone, address, photo_url, department_id, class_id, register_number, designation, is_active, created_at)
+          SELECT id, username, password_hash, salt, role, full_name, email, phone, ${parentPhoneExpr}, ${addressExpr}, ${photoUrlExpr}, department_id, class_id, register_number, designation, is_active, created_at
+          FROM users;
+
+          DROP TABLE users;
+          ALTER TABLE users_migrated RENAME TO users;
+        `);
+        db.exec('PRAGMA foreign_keys = ON;');
+        console.log('Users table schema successfully updated with HOD support!');
+      } catch (migrationErr) {
+        console.error('Users table recreation error:', migrationErr.message);
+        try { db.exec('PRAGMA foreign_keys = ON;'); } catch (ign) {}
+      }
     }
 
-    // 3. User column migrations
-    const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
-    if (!userCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
-    if (!userCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
-    if (!userCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
+    // 4. Double check all required columns exist in users
+    try {
+      const finalUserCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+      if (!finalUserCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
+      if (!finalUserCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
+      if (!finalUserCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
+    } catch (e) {}
 
     // 4. Staff attendance column migrations
     const staffCols = db.prepare("PRAGMA table_info(staff_attendance)").all().map(c => c.name);

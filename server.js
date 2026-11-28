@@ -5,6 +5,16 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { db, hashPassword, verifyPassword, logAudit } = require('./db.js');
 
+// Pre-flight safeguard: Ensure photo_url and required columns exist
+try {
+  const uCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+  if (!uCols.includes('photo_url')) db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT;");
+  if (!uCols.includes('parent_phone')) db.exec("ALTER TABLE users ADD COLUMN parent_phone TEXT;");
+  if (!uCols.includes('address')) db.exec("ALTER TABLE users ADD COLUMN address TEXT;");
+} catch (e) {
+  console.log('Safeguard check note:', e.message);
+}
+
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'kcas_karur_secure_jwt_token_key_2026';
 
